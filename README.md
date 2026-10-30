@@ -5,7 +5,7 @@ A web app for a UK utility's day-ahead power desk. It answers two questions for 
 1. **What wind forecast did we have when we had to commit?** The latest Elexon WINDFOR forecast published before day-ahead gate closure, for the next UK delivery day, with an empirical P10–P90 uncertainty band.
 2. **How far can we trust it?** Forecast error measured against metered wind outturn (Elexon FUELHH): MAE, RMSE, bias, tail errors, error vs lead time, by hour of day, and the hardest days.
 
-**Live app:** https://REPLACE-WITH-VERCEL-URL  
+**Live app:** https://qz7wkr-kappa.vercel.app  
 **Stack:** React + TypeScript (Vite, Recharts) · Python 3.12 (FastAPI) · Docker · Vercel
 
 ---
