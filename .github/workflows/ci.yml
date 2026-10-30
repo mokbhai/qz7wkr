@@ -39,8 +39,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: docker build -t wind-desk .
-      - run: |
-          docker run -d -p 8000:8000 --name wind-desk wind-desk
-          for i in $(seq 1 20); do curl -fs localhost:8000/api/health && exit 0; sleep 1; done
-          docker logs wind-desk; exit 1
+      - run: docker compose config -q
+      - name: Start app and wait for its healthcheck
+        run: docker compose up --build -d --wait --wait-timeout 120
+      - name: Smoke-test UI and API
+        run: |
+          curl -fsS localhost:8000/api/health
+          curl -fsS localhost:8000/ | grep -q '<title>Wind Day-Ahead Desk</title>'
+          curl -fsS 'localhost:8000/api/decision?delivery_date=2026-01-15' > /dev/null
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs
+      - if: always()
+        run: docker compose down --volumes

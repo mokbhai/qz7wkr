@@ -1,11 +1,16 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+// Minimal typing so this config does not need @types/node.
+declare const process: { env: Record<string, string | undefined> };
+
+// Where /api is proxied in dev: localhost outside Docker, the backend service inside compose.
+const apiProxy = process.env.API_PROXY ?? 'http://localhost:8000';
+
 export default defineConfig({
   plugins: [react()],
   server: {
-    // Local dev: run the FastAPI backend on :8000 (see README).
-    proxy: { '/api': 'http://localhost:8000' },
+    proxy: { '/api': apiProxy, '/docs': apiProxy, '/openapi.json': apiProxy },
   },
   build: {
     // React + recharts are ~560 kB minified (~160 kB gzip), split into one long-cached vendor chunk.

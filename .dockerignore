@@ -7,3 +7,6 @@
 backend/static
 .git
 .vercel
+.env
+*.tsbuildinfo
+docker-compose*.yml

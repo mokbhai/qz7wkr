@@ -1,6 +1,85 @@
+# Wind Day-Ahead Desk: Docker Compose
+#
+#   docker compose up --build -d                          app (UI + API)   -> http://localhost:8000
+#   docker compose --profile dev up --build backend-dev frontend-dev
+#                                                         hot reload       -> UI http://localhost:5180, API :8001
+#   docker compose --profile tools run --rm ingest        re-fetch Elexon data into backend/data
+#   docker compose --profile dev --profile tools down     stop and remove everything
+#
+# Ports are configurable via .env (see .env.example).
+name: wind-desk
+
+x-app-image: &app-image
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: wind-desk:local
+
+x-healthcheck: &api-healthcheck
+  test: ["CMD", "python", "-c", "import os,urllib.request; urllib.request.urlopen(f'http://127.0.0.1:{os.environ.get(\"PORT\", \"8000\")}/api/health', timeout=2)"]
+  interval: 10s
+  timeout: 3s
+  start_period: 10s
+  retries: 3
+
 services:
+  # Production-like: one container serves the built React app and the FastAPI API.
   app:
-    build: .
+    <<: *app-image
+    environment:
+      PORT: "8000"
     ports:
-      - "8000:8000"
+      - "${APP_PORT:-8000}:8000"
+    healthcheck: *api-healthcheck
     restart: unless-stopped
+
+  # Dev: same image, backend/app bind-mounted, uvicorn reloads on save.
+  backend-dev:
+    <<: *app-image
+    profiles: ["dev"]
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/app"]
+    environment:
+      PORT: "8000"
+    volumes:
+      - ./backend/app:/app/app:ro
+    ports:
+      - "${DEV_API_PORT:-8001}:8000"
+    healthcheck: *api-healthcheck
+    restart: unless-stopped
+
+  # Dev: Vite dev server with HMR; /api is proxied to the backend-dev service over the compose network.
+  frontend-dev:
+    image: node:22-alpine
+    profiles: ["dev"]
+    working_dir: /app
+    command: ["sh", "-c", "npm ci --no-audit --no-fund && npm run dev -- --host 0.0.0.0 --port 5173 --strictPort"]
+    environment:
+      API_PROXY: http://backend-dev:8000
+    volumes:
+      - ./frontend:/app
+      - frontend-node-modules:/app/node_modules
+    ports:
+      - "${DEV_UI_PORT:-5180}:5173"
+    depends_on:
+      backend-dev:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:5173/ >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 3s
+      start_period: 60s
+      retries: 5
+    restart: unless-stopped
+
+  # One-shot: refresh the committed snapshot from Elexon BMRS (restart `app` afterwards to load it).
+  ingest:
+    <<: *app-image
+    profiles: ["tools"]
+    command: ["python", "-m", "app.ingest"]
+    user: "${UID:-1000}:${GID:-1000}"
+    volumes:
+      - ./backend/data:/app/data
+    restart: "no"
+
+volumes:
+  frontend-node-modules:

@@ -97,7 +97,8 @@ Interactive docs: `/docs` (FastAPI Swagger UI).
 │   │   └── components/          BriefView, AccuracyView, shared UI pieces
 │   ├── index.html, vite.config.ts, tsconfig.json, package.json
 ├── Dockerfile                   Multi-stage: build React → serve app + API with uvicorn
-├── docker-compose.yml
+├── docker-compose.yml           app (prod-like), dev profile (hot reload), tools profile (ingest)
+├── .env.example                 Compose host ports
 ├── vercel.json                  Static frontend + Python function for /api/*
 ├── pyproject.toml               Python deps (runtime + dev group), pytest and ruff config; read by uv, Docker and Vercel
 ├── uv.lock                      Locked Python dependency graph (installed with --frozen everywhere)
@@ -110,9 +111,21 @@ Interactive docs: `/docs` (FastAPI Swagger UI).
 ### Docker (recommended)
 
 ```bash
-docker compose up --build
-# open http://localhost:8000
+cp .env.example .env            # optional: change host ports
+docker compose up --build -d    # UI + API at http://localhost:8000 (API docs at /docs)
+docker compose ps               # app should be "healthy"
+docker compose down
 ```
+
+The `app` service runs the root `Dockerfile` image. It has a healthcheck on `/api/health` and restarts with `unless-stopped`, and its host port comes from `APP_PORT`. Two optional profiles add more:
+
+| Command | What it runs |
+|---|---|
+| `docker compose --profile dev up --build backend-dev frontend-dev` | Hot reload. `backend-dev` runs uvicorn `--reload` with `backend/app` bind-mounted (API on `:8001`). `frontend-dev` runs the Vite dev server on `:5180`, proxying `/api` to `backend-dev` over the compose network. |
+| `docker compose --profile tools run --rm ingest` | One-shot refresh of the Elexon snapshot into `backend/data` (bind mount). Restart `app` afterwards. |
+| `docker compose --profile dev --profile tools down --volumes` | Stops and removes every container, network and volume. |
+
+Ports are set by `APP_PORT`, `DEV_API_PORT` and `DEV_UI_PORT` (see `.env.example`).
 
 ### Without Docker
 
