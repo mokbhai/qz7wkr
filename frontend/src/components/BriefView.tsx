@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { apiUrl, useApi, type Brief, type CutoffKey, type Meta } from '../api';
-import { addDays, dateRange, mw, toCsv, ukDay, ukHour, ukStamp } from '../format';
+import { addDays, dateRange, gwh, mw, toCsv, ukDay, ukHour, ukStamp } from '../format';
 import { Card, DownloadIcon, IconButton, Legend, Stat, Status } from './ui';
 
 const gwhValue = (mwh: number | null) => (mwh == null ? '–' : (mwh / 1000).toFixed(1));
@@ -38,10 +38,21 @@ export function BriefView({ meta, cutoff }: { meta: Meta; cutoff: CutoffKey }) {
           </p>
         </div>
         <div className="daypicker">
-          <button type="button" aria-label="Previous day" disabled={idx <= 0} onClick={() => setDelivery(deliveries[idx - 1])}>
+          <button
+            type="button"
+            aria-label="Previous day"
+            title="Previous day (←)"
+            disabled={idx <= 0}
+            onClick={() => setDelivery(deliveries[idx - 1])}
+          >
             ‹
           </button>
-          <select aria-label="Delivery day" value={delivery} onChange={(e) => setDelivery(e.target.value)}>
+          <select
+            aria-label="Delivery day"
+            title="Delivery day (use ← / → to step through days)"
+            value={delivery}
+            onChange={(e) => setDelivery(e.target.value)}
+          >
             {deliveries.map((d) => (
               <option key={d} value={d}>
                 {ukDay(d)}
@@ -51,15 +62,12 @@ export function BriefView({ meta, cutoff }: { meta: Meta; cutoff: CutoffKey }) {
           <button
             type="button"
             aria-label="Next day"
+            title="Next day (→)"
             disabled={idx >= deliveries.length - 1}
             onClick={() => setDelivery(deliveries[idx + 1])}
           >
             ›
           </button>
-          <span className="kbd-hint" aria-hidden>
-            <kbd>←</kbd>
-            <kbd>→</kbd>
-          </span>
         </div>
       </div>
 
@@ -157,7 +165,7 @@ function BriefBody({
           unit="GWh"
           note={
             showActual && t.actual != null && t.forecast != null
-              ? `forecast was ${t.forecast >= t.actual ? 'high' : 'low'} by ${gwhValue(Math.abs(t.forecast - t.actual))}`
+              ? `forecast was ${t.forecast >= t.actual ? 'high' : 'low'} by ${gwh(Math.abs(t.forecast - t.actual))}`
               : 'hidden'
           }
         />
@@ -189,7 +197,14 @@ function BriefBody({
           <ResponsiveContainer>
             <ComposedChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
               <CartesianGrid stroke="var(--grid)" vertical={false} />
-              <XAxis dataKey="label" tick={{ fontSize: 11 }} interval={2} stroke="var(--axis)" tickLine={false} />
+              <XAxis
+                dataKey="label"
+                tick={{ fontSize: 11 }}
+                interval="preserveStartEnd"
+                minTickGap={72}
+                stroke="var(--axis)"
+                tickLine={false}
+              />
               <YAxis
                 tick={{ fontSize: 11 }}
                 stroke="var(--axis)"
@@ -262,7 +277,17 @@ function BriefBody({
                   <tr key={r.published} className={r.published === used ? 'is-used' : r.usable ? '' : 'is-late'}>
                     <td>{ukStamp(r.published)}</td>
                     <td>{r.lead.toFixed(1)} h</td>
-                    <td>{r.full ? `${gwhValue(r.total)} GWh` : <span className="muted">{r.covered}/{hours.length} h</span>}</td>
+                    <td
+                      title={r.full ? undefined : 'This run does not reach the end of the delivery day, so no day total'}
+                    >
+                      {r.full ? (
+                        `${gwhValue(r.total)} GWh`
+                      ) : (
+                        <span className="muted">
+                          partial ({r.covered} of {hours.length} h)
+                        </span>
+                      )}
+                    </td>
                     <td className={r.delta == null || Math.abs(r.delta) < 50 ? '' : r.delta < 0 ? 'neg' : 'pos'}>
                       {r.delta == null ? '' : Math.abs(r.delta) < 50 ? '0.0' : `${r.delta > 0 ? '+' : ''}${gwhValue(r.delta)}`}
                     </td>

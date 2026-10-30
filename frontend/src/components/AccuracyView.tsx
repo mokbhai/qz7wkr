@@ -375,7 +375,15 @@ function AccuracyBody({ acc, curve, marker, mode }: { acc: Accuracy; curve: Hori
                 />
                 <Tooltip formatter={(v: number) => mw(v)} labelFormatter={(h: number) => `${String(h).padStart(2, '0')}:00`} />
                 <Bar dataKey="mae" name="MAE" fill="var(--c-band-strong)" isAnimationActive={false} />
-                <Line dataKey="bias" name="Bias" stroke="var(--c-bias)" strokeWidth={1.5} dot={false} isAnimationActive={false} />
+                <Line
+                  dataKey="bias"
+                  name="Bias"
+                  stroke="var(--c-bias)"
+                  strokeWidth={1.5}
+                  strokeDasharray="4 3"
+                  dot={false}
+                  isAnimationActive={false}
+                />
               </ComposedChart>
             </ResponsiveContainer>
           </div>

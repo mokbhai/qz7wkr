@@ -209,22 +209,6 @@ select {
   cursor: default;
 }
 
-.kbd-hint {
-  display: inline-flex;
-  gap: 2px;
-  margin-left: 6px;
-}
-
-kbd {
-  font: 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: var(--muted);
-  border: 1px solid var(--border-strong);
-  border-bottom-width: 2px;
-  border-radius: 4px;
-  padding: 3px 5px;
-  background: var(--card);
-}
-
 .filters {
   display: flex;
   flex-wrap: wrap;
@@ -552,8 +536,7 @@ td.neg {
 }
 
 @media (max-width: 640px) {
-  .appbar__crumb,
-  .kbd-hint {
+  .appbar__crumb {
     display: none;
   }
   .appbar__tabs {
