@@ -86,10 +86,7 @@ Interactive docs: `/docs` (FastAPI Swagger UI).
 │   │   ├── analysis.py          Domain logic (pure functions)
 │   │   └── main.py              FastAPI routes, caching, static SPA serving
 │   ├── data/elexon_wind_2026-01.json.gz   Committed data snapshot
-│   ├── tests/                   pytest: domain unit tests, API tests on real data, packaging check
-│   ├── requirements.txt         Runtime deps (pinned)
-│   ├── requirements-dev.txt     + pytest, httpx, ruff
-│   └── pyproject.toml           pytest + ruff config
+│   └── tests/                   pytest: domain unit tests, API tests on real data
 ├── frontend/
 │   ├── src/
 │   │   ├── App.tsx              Shell: header, gate-closure switch, tabs
@@ -102,7 +99,9 @@ Interactive docs: `/docs` (FastAPI Swagger UI).
 ├── Dockerfile                   Multi-stage: build React → serve app + API with uvicorn
 ├── docker-compose.yml
 ├── vercel.json                  Static frontend + Python function for /api/*
-├── requirements.txt             Root copy of runtime deps, read by Vercel (a test keeps it in sync)
+├── pyproject.toml               Python deps (runtime + dev group), pytest and ruff config; read by uv, Docker and Vercel
+├── uv.lock                      Locked Python dependency graph (installed with --frozen everywhere)
+├── .python-version              Python 3.12
 └── .github/workflows/ci.yml     Lint, tests, typecheck, build, Docker smoke test
 ```
 
@@ -118,11 +117,9 @@ docker compose up --build
 ### Without Docker
 
 ```bash
-# backend (Python 3.12+)
-cd backend
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements-dev.txt
-uvicorn app.main:app --reload --port 8000
+# backend (uv installs Python 3.12 and the locked deps into .venv)
+uv sync --frozen
+cd backend && uv run uvicorn app.main:app --reload --port 8000
 
 # frontend (Node 22+), in a second terminal
 cd frontend
@@ -133,13 +130,13 @@ npm run dev        # http://localhost:5173, proxies /api to :8000
 ### Refresh the data snapshot (optional)
 
 ```bash
-cd backend && python -m app.ingest
+cd backend && uv run python -m app.ingest
 ```
 
 ### Tests and checks
 
 ```bash
-cd backend && ruff check . && ruff format --check . && pytest -q
+uv run ruff check backend api && uv run ruff format --check backend api && uv run pytest -q
 cd frontend && npm run typecheck && npm test && npm run build
 ```
 

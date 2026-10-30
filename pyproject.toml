@@ -1,0 +1,32 @@
+[project]
+name = "wind-day-ahead-desk"
+version = "1.0.0"
+description = "Day-ahead wind forecast brief and forecast accuracy for GB power procurement"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "fastapi==0.115.12",
+  "uvicorn[standard]==0.34.2",
+]
+
+[dependency-groups]
+dev = [
+  "httpx==0.28.1",
+  "pytest==8.3.5",
+  "ruff==0.11.8",
+]
+
+[tool.uv]
+# Application, not a library: only install dependencies, never build the project itself.
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+pythonpath = ["backend"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+src = ["backend"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
