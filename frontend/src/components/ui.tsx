@@ -1,8 +1,32 @@
 import type { ReactNode } from 'react';
 
-export function Kpi({ label, value, sub, tone }: { label: string; value: string; sub?: ReactNode; tone?: 'muted' }) {
+export function Eyebrow({ children }: { children: ReactNode }) {
+  return <div className="eyebrow">{children}</div>;
+}
+
+export function ViewHead({ eyebrow, title, lede }: { eyebrow: string; title: ReactNode; lede?: ReactNode }) {
   return (
-    <div className={`kpi${tone === 'muted' ? ' kpi--muted' : ''}`}>
+    <header className="view-head">
+      <Eyebrow>{eyebrow}</Eyebrow>
+      <h2>{title}</h2>
+      {lede && <p>{lede}</p>}
+    </header>
+  );
+}
+
+export function Kpi({
+  label,
+  value,
+  sub,
+  tone,
+}: {
+  label: string;
+  value: string;
+  sub?: ReactNode;
+  tone?: 'muted' | 'brand';
+}) {
+  return (
+    <div className={`kpi${tone ? ` kpi--${tone}` : ''}`}>
       <div className="kpi__label">{label}</div>
       <div className="kpi__value">{value}</div>
       {sub && <div className="kpi__sub">{sub}</div>}
@@ -10,17 +34,59 @@ export function Kpi({ label, value, sub, tone }: { label: string; value: string;
   );
 }
 
-export function Panel({ title, note, actions, children }: { title: string; note?: ReactNode; actions?: ReactNode; children: ReactNode }) {
+export function Panel({
+  eyebrow,
+  title,
+  note,
+  actions,
+  children,
+}: {
+  eyebrow?: string;
+  title: string;
+  note?: ReactNode;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <section className="panel">
       <header className="panel__head">
         <div>
-          <h2 className="panel__title">{title}</h2>
+          {eyebrow && <Eyebrow>{eyebrow}</Eyebrow>}
+          <h3 className="panel__title">{title}</h3>
           {note && <p className="panel__note">{note}</p>}
         </div>
         {actions && <div className="panel__actions">{actions}</div>}
       </header>
       {children}
+    </section>
+  );
+}
+
+export function Signal({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="signal">
+      <Eyebrow>Forecast signal</Eyebrow>
+      <h3>{title}</h3>
+      <p>{children}</p>
+    </section>
+  );
+}
+
+export function WatchList({ items }: { items: { text: ReactNode; detail?: ReactNode }[] }) {
+  if (items.length === 0) return null;
+  return (
+    <section className="watch">
+      <Eyebrow>Watch list</Eyebrow>
+      <ul>
+        {items.map((item, i) => (
+          <li key={i}>
+            <span>
+              {item.text}
+              {item.detail && <small>{item.detail}</small>}
+            </span>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

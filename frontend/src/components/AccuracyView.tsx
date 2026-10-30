@@ -15,7 +15,7 @@ import {
 } from 'recharts';
 import { apiUrl, useApi, type Accuracy, type CutoffKey, type HorizonPoint, type Insights, type Meta } from '../api';
 import { dateRange, gw, gwh, mw, pct, signed, ukDay, ukStamp } from '../format';
-import { Kpi, Legend, Panel, Segmented, Status } from './ui';
+import { Eyebrow, Kpi, Legend, Panel, Segmented, Status, ViewHead } from './ui';
 
 type Mode = 'decision' | 'horizon';
 
@@ -37,6 +37,16 @@ export function AccuracyView({ meta, cutoff }: { meta: Meta; cutoff: CutoffKey }
 
   return (
     <div className="view">
+      <ViewHead
+        eyebrow="Forecast accuracy"
+        title={
+          <>
+            How far to <em>trust</em> the forecast.
+          </>
+        }
+        lede="Each figure compares a forecast the desk could actually have used with metered outturn, so the error you see is the error you would have traded on."
+      />
+
       {insights.status === 'ok' && <Findings insights={insights.data} meta={meta} />}
 
       <div className="toolbar">
@@ -110,26 +120,37 @@ function Findings({ insights, meta }: { insights: Insights; meta: Meta }) {
   const [e, n] = [meta.cutoffs.find((c) => c.key === 'epex')!, meta.cutoffs.find((c) => c.key === 'n2ex')!];
   return (
     <section className="findings" aria-label="Pilot findings">
-      <h2 className="findings__title">Pilot findings · all January 2026 decisions</h2>
+      <Eyebrow>What the pilot shows · all January 2026 decisions</Eyebrow>
       <ol>
-        <li>
-          <strong>Typical miss at gate closure: {gw(epex.metrics.mae)}</strong> ({pct(epex.metrics.nmae)} of average wind
-          output); 1 hour in 10 misses by more than {gw(epex.metrics.p90_abs)}.
-        </li>
-        <li>
-          <strong>The forecast runs high: {signed(gw(epex.metrics.bias), epex.metrics.bias)} on average.</strong> Buying
-          against the raw forecast leaves the book short; the P10 plan figure corrects for it.
-        </li>
-        <li>
-          <strong>The band is honest:</strong> tested on days it never saw, the P10–P90 range held{' '}
-          {pct(epex.band_coverage.inside)} of outturns (target 80%).
-        </li>
-        <li>
-          <strong>
-            Waiting for {n.local_time} ({n.label}) {gain < 0.05 ? 'barely helps' : 'helps'}: {pct(gain, 1)} lower error
-          </strong>{' '}
-          than at {e.local_time}, even though a fresher forecast run lands in between.
-        </li>
+        {[
+          <>
+            <strong>The typical miss at gate closure is {gw(epex.metrics.mae)}</strong>, {pct(epex.metrics.nmae)} of average
+            wind output. One hour in ten misses by more than {gw(epex.metrics.p90_abs)}.
+          </>,
+          <>
+            <strong>
+              The forecast runs {epex.metrics.bias > 0 ? 'high' : 'low'}, by {gw(Math.abs(epex.metrics.bias))} on average.
+            </strong>{' '}
+            Buying against the raw number leaves the book {epex.metrics.bias > 0 ? 'short' : 'long'}. The P10 plan figure
+            corrects for it.
+          </>,
+          <>
+            <strong>The range holds up.</strong> Tested on days it never saw, the P10–P90 band caught{' '}
+            {pct(epex.band_coverage.inside)} of outturns against an 80% target.
+          </>,
+          <>
+            <strong>
+              Waiting until {n.local_time} {gain < 0.05 ? 'barely helps' : 'helps'}: {pct(gain, 1)} less error.
+            </strong>{' '}
+            A fresher run lands between {e.local_time} and {n.local_time}, but it changes little. Pick the auction on price,
+            not on forecast freshness.
+          </>,
+        ].map((body, i) => (
+          <li key={i}>
+            <span className="findings__num">{String(i + 1).padStart(2, '0')}</span>
+            <span>{body}</span>
+          </li>
+        ))}
       </ol>
     </section>
   );
@@ -148,15 +169,15 @@ function AccuracyBody({ acc, curve, marker, mode }: { acc: Accuracy; curve: Hori
   return (
     <>
       <div className="kpis">
-        <Kpi label="Mean absolute error" value={mw(m.mae)} sub={`${pct(m.nmae)} of mean outturn`} />
+        <Kpi tone="brand" label="Mean absolute error" value={mw(m.mae)} sub={`${pct(m.nmae)} of mean outturn`} />
         <Kpi label="RMSE" value={mw(m.rmse)} sub="penalises big misses" />
-        <Kpi label="Bias (forecast − outturn)" value={signed(mw(m.bias), m.bias)} sub={m.bias > 0 ? 'over-forecast → short' : 'under-forecast → long'} />
+        <Kpi label="Bias · forecast − outturn" value={signed(mw(m.bias), m.bias)} sub={m.bias > 0 ? 'runs high: leaves the book short' : 'runs low: leaves the book long'} />
         <Kpi label="P90 absolute error" value={mw(m.p90_abs)} sub={`P99 ${mw(m.p99_abs)} · max ${mw(m.max_abs)}`} />
         <Kpi label="Sample" value={`${m.n} h`} sub={`mean lead ${m.mean_horizon_h.toFixed(1)} h`} />
       </div>
 
       <div className="grid-2">
-        <Panel title="Error grows with lead time" note="Latest forecast at least N hours before delivery, same date range.">
+        <Panel eyebrow="Lead time" title="Error grows with lead time" note="Latest forecast at least N hours before delivery, same date range.">
           <Legend
             items={[
               { label: 'MAE', className: 'sw-forecast' },
@@ -193,7 +214,7 @@ function AccuracyBody({ acc, curve, marker, mode }: { acc: Accuracy; curve: Hori
           </div>
         </Panel>
 
-        <Panel title="Where the misses fall" note="Error = forecast − outturn, hourly. Right of zero: wind came in lower than forecast.">
+        <Panel eyebrow="Error spread" title="Where the misses fall" note="Error = forecast − outturn, hourly. Right of zero: wind came in lower than forecast.">
           <div className="chart">
             <ResponsiveContainer>
               <BarChart data={acc.histogram} margin={{ top: 8, right: 12, bottom: 16, left: 8 }}>
@@ -221,7 +242,7 @@ function AccuracyBody({ acc, curve, marker, mode }: { acc: Accuracy; curve: Hori
         </Panel>
       </div>
 
-      <Panel title="Forecast vs outturn" note="Hourly, UK time. The gap between the lines is the volume the desk has to source or sell elsewhere.">
+      <Panel eyebrow="Time series" title="Forecast vs outturn" note="Hourly, UK time. The gap between the lines is the volume the desk has to source or sell elsewhere.">
         <Legend
           items={[
             { label: 'Forecast', className: 'sw-forecast' },
@@ -252,7 +273,7 @@ function AccuracyBody({ acc, curve, marker, mode }: { acc: Accuracy; curve: Hori
       </Panel>
 
       <div className="grid-2">
-        <Panel title="Error by hour of day" note="Mean absolute error and bias per UK delivery hour.">
+        <Panel eyebrow="Time of day" title="Error by hour of day" note="Mean absolute error and bias per UK delivery hour.">
           <div className="chart">
             <ResponsiveContainer>
               <ComposedChart data={acc.by_hour} margin={{ top: 8, right: 12, bottom: 0, left: 8 }}>
@@ -267,7 +288,7 @@ function AccuracyBody({ acc, curve, marker, mode }: { acc: Accuracy; curve: Hori
           </div>
         </Panel>
 
-        <Panel title="Hardest days" note="Delivery days ranked by mean absolute error.">
+        <Panel eyebrow="Review" title="Hardest days" note="Delivery days ranked by mean absolute error. Start post-mortems here.">
           <div className="table-wrap">
             <table>
               <thead>
