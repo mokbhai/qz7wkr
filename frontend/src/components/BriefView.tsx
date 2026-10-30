@@ -1,76 +1,66 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { apiUrl, useApi, type Brief, type CutoffKey, type Meta } from '../api';
-import { addDays, dateRange, gw, gwh, mw, signed, toCsv, ukDay, ukHour, ukStamp } from '../format';
-import { Kpi, Legend, Panel, Signal, Status, ViewHead, WatchList } from './ui';
+import { addDays, dateRange, mw, toCsv, ukDay, ukHour, ukStamp } from '../format';
+import { Card, DownloadIcon, IconButton, Legend, Stat, Status } from './ui';
+
+const gwhValue = (mwh: number | null) => (mwh == null ? '–' : (mwh / 1000).toFixed(1));
 
 export function BriefView({ meta, cutoff }: { meta: Meta; cutoff: CutoffKey }) {
   const deliveries = useMemo(() => dateRange(meta.delivery_dates.first, meta.delivery_dates.last), [meta]);
   const [delivery, setDelivery] = useState('2026-01-15');
   const [showActual, setShowActual] = useState(true);
   const [showRuns, setShowRuns] = useState(false);
-  const [showTable, setShowTable] = useState(false);
 
   const state = useApi<Brief>(apiUrl('/api/decision', { delivery_date: delivery, cutoff }));
   const cutoffInfo = meta.cutoffs.find((c) => c.key === cutoff)!;
   const idx = deliveries.indexOf(delivery);
-  const brief = state.status === 'ok' ? state.data : null;
+
+  // ← / → step through days, unless the user is typing in a control.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLElement && e.target.closest('input, select, textarea')) return;
+      if (e.key === 'ArrowLeft' && idx > 0) setDelivery(deliveries[idx - 1]);
+      if (e.key === 'ArrowRight' && idx < deliveries.length - 1) setDelivery(deliveries[idx + 1]);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [idx, deliveries]);
 
   return (
     <div className="view">
-      <ViewHead
-        eyebrow="Day-ahead brief"
-        title={
-          brief && brief.totals_mwh.p10 != null ? (
-            <>
-              {ukDay(brief.delivery_date)}: plan on <em>{gwh(brief.totals_mwh.p10)}</em> of wind.
-            </>
-          ) : (
-            'What wind can the desk count on tomorrow?'
-          )
-        }
-        lede={
-          brief ? (
-            <>
-              Committed at {ukStamp(brief.decision_at)} UK ({cutoffInfo.label}). Only forecast runs published before that
-              moment are used; nothing from hindsight leaks in.
-            </>
-          ) : undefined
-        }
-      />
-
-      <div className="toolbar">
-        <div className="field">
-          <label htmlFor="decision-day">Decision day</label>
-          <div className="stepper">
-            <button type="button" aria-label="Previous day" disabled={idx <= 0} onClick={() => setDelivery(deliveries[idx - 1])}>
-              ‹
-            </button>
-            <select id="decision-day" value={delivery} onChange={(e) => setDelivery(e.target.value)}>
-              {deliveries.map((d) => (
-                <option key={d} value={d}>
-                  Decide {ukDay(addDays(d, -1))} → deliver {ukDay(d)}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              aria-label="Next day"
-              disabled={idx >= deliveries.length - 1}
-              onClick={() => setDelivery(deliveries[idx + 1])}
-            >
-              ›
-            </button>
-          </div>
+      <div className="pagehead">
+        <div>
+          <h1>Delivery {ukDay(delivery)} 2026</h1>
+          <p className="pagehead__sub">
+            Bought {ukDay(addDays(delivery, -1))} before the {cutoffInfo.local_time} gate closure (
+            {cutoff === 'epex' ? 'EPEX' : 'N2EX'})
+          </p>
         </div>
-        <label className="check">
-          <input type="checkbox" checked={showRuns} onChange={(e) => setShowRuns(e.target.checked)} />
-          Forecast evolution
-        </label>
-        <label className="check">
-          <input type="checkbox" checked={showActual} onChange={(e) => setShowActual(e.target.checked)} />
-          Outturn (hindsight)
-        </label>
+        <div className="daypicker">
+          <button type="button" aria-label="Previous day" disabled={idx <= 0} onClick={() => setDelivery(deliveries[idx - 1])}>
+            ‹
+          </button>
+          <select aria-label="Delivery day" value={delivery} onChange={(e) => setDelivery(e.target.value)}>
+            {deliveries.map((d) => (
+              <option key={d} value={d}>
+                {ukDay(d)}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            aria-label="Next day"
+            disabled={idx >= deliveries.length - 1}
+            onClick={() => setDelivery(deliveries[idx + 1])}
+          >
+            ›
+          </button>
+          <span className="kbd-hint" aria-hidden>
+            <kbd>←</kbd>
+            <kbd>→</kbd>
+          </span>
+        </div>
       </div>
 
       {state.status !== 'ok' ? (
@@ -80,91 +70,30 @@ export function BriefView({ meta, cutoff }: { meta: Meta; cutoff: CutoffKey }) {
           brief={state.data}
           showActual={showActual}
           showRuns={showRuns}
-          showTable={showTable}
-          onToggleTable={() => setShowTable((v) => !v)}
+          setShowActual={setShowActual}
+          setShowRuns={setShowRuns}
         />
       )}
     </div>
   );
 }
 
-/** Plain-language takeaways derived from the brief; every number is traceable to the payload. */
-function readBrief(brief: Brief) {
-  const { hours, totals_mwh: t } = brief;
-  const withBand = hours.filter((h) => h.forecast != null && h.p10 != null && h.p90 != null);
-
-  const shift = withBand.length
-    ? withBand.reduce((s, h) => s + ((h.p10! + h.p90!) / 2 - h.forecast!), 0) / withBand.length
-    : 0;
-  const signal =
-    t.forecast != null && t.p10 != null
-      ? {
-          title: `Plan on ${gwh(t.p10)}, not ${gwh(t.forecast)}.`,
-          body:
-            (shift < 0
-              ? `At this lead time the outturn has tended to land below the forecast, so the likely range sits under it. `
-              : `At this lead time the outturn has landed either side of the forecast. `) +
-            `Holding cover for the ${gwh(t.forecast - t.p10)} gap keeps the plan safe about 9 hours in 10.`,
-        }
-      : null;
-
-  const watch: { text: string; detail?: string }[] = [];
-
-  const widest = withBand.reduce<(typeof withBand)[number] | null>(
-    (best, h) => (!best || h.p90! - h.p10! > best.p90! - best.p10! ? h : best),
-    null,
-  );
-  if (widest) {
-    watch.push({
-      text: `Widest range at ${ukHour(widest.time)}: ${gw(widest.p10, 1)} to ${gw(widest.p90, 1)}`,
-      detail: 'The hour most exposed to a wind miss.',
-    });
-  }
-
-  let ramp: { from: string; to: string; delta: number } | null = null;
-  for (let i = 1; i < hours.length; i++) {
-    const a = hours[i - 1].forecast;
-    const b = hours[i].forecast;
-    if (a == null || b == null) continue;
-    if (!ramp || Math.abs(b - a) > Math.abs(ramp.delta)) ramp = { from: hours[i - 1].time, to: hours[i].time, delta: b - a };
-  }
-  if (ramp && Math.abs(ramp.delta) >= 500) {
-    watch.push({
-      text: `${ramp.delta < 0 ? 'Wind drops' : 'Wind ramps'} ${gw(Math.abs(ramp.delta), 1)} between ${ukHour(ramp.from)} and ${ukHour(ramp.to)}`,
-      detail: 'Steepest hour-on-hour move in the forecast.',
-    });
-  }
-
-  const late = [...brief.runs].reverse().find((r) => !r.usable && r.values.every((v) => v != null));
-  if (late && t.forecast != null) {
-    const lateTotal = late.values.reduce<number>((s, v) => s + (v ?? 0), 0);
-    const diff = lateTotal - t.forecast;
-    watch.push({
-      text: `The ${ukStamp(late.published)} run moved the day ${signed(gwh(diff), diff)}`,
-      detail: 'Published after gate closure: too late for this auction, useful for intraday.',
-    });
-  }
-
-  return { signal, watch };
-}
-
 function BriefBody({
   brief,
   showActual,
   showRuns,
-  showTable,
-  onToggleTable,
+  setShowActual,
+  setShowRuns,
 }: {
   brief: Brief;
   showActual: boolean;
   showRuns: boolean;
-  showTable: boolean;
-  onToggleTable: () => void;
+  setShowActual: (v: boolean) => void;
+  setShowRuns: (v: boolean) => void;
 }) {
   const { totals_mwh: t, hours } = brief;
-  const horizons = hours.map((h) => h.horizon_h).filter((h): h is number => h != null);
-  const runLabel = brief.runs_used.map(ukStamp).join(', ');
-  const { signal, watch } = useMemo(() => readBrief(brief), [brief]);
+  const used = brief.runs_used[0];
+  const leads = hours.map((h) => h.horizon_h).filter((h): h is number => h != null);
 
   const data = hours.map((h, i) => {
     const row: Record<string, unknown> = {
@@ -177,7 +106,22 @@ function BriefBody({
     return row;
   });
 
-  const csv = () => {
+  const runs = useMemo(() => {
+    let prevTotal: number | null = null;
+    const rows = brief.runs.map((r) => {
+      const covered = r.values.filter((v) => v != null).length;
+      const total = r.values.reduce<number>((s, v) => s + (v ?? 0), 0);
+      const full = covered === hours.length;
+      const delta = full && prevTotal != null ? total - prevTotal : null;
+      if (full) prevTotal = total;
+      const lead = (new Date(hours[0].time).getTime() - new Date(r.published).getTime()) / 3_600_000;
+      return { ...r, covered, total, full, delta, lead };
+    });
+    // Runs published once the day has started are intraday material, not day-ahead; keep the last 10 before it.
+    return rows.filter((r) => r.lead > 0).slice(-10);
+  }, [brief.runs, hours]);
+
+  const downloadCsv = () => {
     const body = toCsv(
       hours.map((h) => ({
         time_utc: h.time,
@@ -191,157 +135,191 @@ function BriefBody({
       })),
     );
     const url = URL.createObjectURL(new Blob([body], { type: 'text/csv' }));
-    const a = Object.assign(document.createElement('a'), { href: url, download: `wind-brief-${brief.delivery_date}.csv` });
+    const a = Object.assign(document.createElement('a'), { href: url, download: `wind-${brief.delivery_date}.csv` });
     a.click();
     URL.revokeObjectURL(url);
   };
 
   return (
     <>
-      <div className="kpis">
-        <Kpi
-          tone="brand"
-          label="Plan-safe wind · P10"
-          value={gwh(t.p10)}
-          sub={t.forecast != null && t.p10 != null ? `${gwh(t.forecast - t.p10)} of cover below the forecast` : undefined}
+      <div className="stats">
+        <Stat label="Wind forecast" value={gwhValue(t.forecast)} unit="GWh" note={`run of ${ukStamp(used)}`} />
+        <Stat
+          label="Plan on (P10)"
+          value={gwhValue(t.p10)}
+          unit="GWh"
+          note={t.forecast != null && t.p10 != null ? `${gwhValue(t.forecast - t.p10)} GWh under forecast` : undefined}
         />
-        <Kpi
-          label={`Forecast · ${ukDay(brief.delivery_date)}`}
-          value={gwh(t.forecast)}
-          sub={`avg ${mw(t.forecast != null ? t.forecast / hours.length : null)}`}
-        />
-        <Kpi label="Upside · P90" value={gwh(t.p90)} sub="outturn tops this ~1 hour in 10" />
-        <Kpi
-          label="Run in hand"
-          value={runLabel || '–'}
-          sub={horizons.length ? `lead ${Math.min(...horizons)}–${Math.max(...horizons)} h` : undefined}
-        />
-        {showActual && (
-          <Kpi
-            tone="muted"
-            label="Outturn · hindsight"
-            value={gwh(t.actual)}
-            sub={
-              t.actual != null && t.forecast != null
-                ? `forecast ${signed(gwh(t.forecast - t.actual), t.forecast - t.actual)} vs outturn`
-                : undefined
-            }
-          />
-        )}
-      </div>
-
-      <div className="brief-grid">
-        <Panel
-          eyebrow="Renewable outlook · GB wind"
-          title="Wind generation for the delivery day"
-          note={`Band: P10 to P90 of outturns on the other ${brief.calibration_days} pilot days at the same lead time.`}
-          actions={
-            <button type="button" className="btn" onClick={csv}>
-              Download CSV
-            </button>
+        <Stat label="High case (P90)" value={gwhValue(t.p90)} unit="GWh" />
+        <Stat
+          label="Outturn*"
+          value={showActual ? gwhValue(t.actual) : '–'}
+          unit="GWh"
+          note={
+            showActual && t.actual != null && t.forecast != null
+              ? `forecast was ${t.forecast >= t.actual ? 'high' : 'low'} by ${gwhValue(Math.abs(t.forecast - t.actual))}`
+              : 'hidden'
           }
-        >
-          <Legend
-            items={[
-              { label: 'Forecast at gate closure', className: 'sw-forecast' },
-              { label: 'P10–P90 band', className: 'sw-band' },
-              ...(showActual ? [{ label: 'Outturn', className: 'sw-actual' }] : []),
-              ...(showRuns
-                ? [
-                    { label: 'Earlier runs', className: 'sw-run' },
-                    { label: 'Runs after gate closure', className: 'sw-late' },
-                  ]
-                : []),
-            ]}
-          />
-          <div className="chart chart--tall">
-            <ResponsiveContainer>
-              <ComposedChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 8 }}>
-                <CartesianGrid stroke="var(--grid)" vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 12 }} interval={2} stroke="var(--axis)" />
-                <YAxis
-                  tick={{ fontSize: 12 }}
-                  stroke="var(--axis)"
-                  tickFormatter={(v: number) => `${(v / 1000).toFixed(0)} GW`}
-                  width={52}
-                />
-                <Tooltip content={<BriefTooltip />} />
-                <Area dataKey="band" stroke="none" fill="var(--c-band)" isAnimationActive={false} />
-                {showRuns &&
-                  brief.runs.map((r, j) => (
-                    <Line
-                      key={r.published}
-                      dataKey={`run${j}`}
-                      stroke={r.usable ? 'var(--c-run)' : 'var(--c-late)'}
-                      strokeDasharray={r.usable ? undefined : '4 3'}
-                      strokeWidth={1}
-                      dot={false}
-                      isAnimationActive={false}
-                      connectNulls
-                    />
-                  ))}
-                <Line dataKey="forecast" stroke="var(--c-forecast)" strokeWidth={2.5} dot={false} isAnimationActive={false} />
-                {showActual && (
-                  <Line dataKey="actual" stroke="var(--c-actual)" strokeWidth={1.75} dot={false} isAnimationActive={false} />
-                )}
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
-        </Panel>
-
-        <aside className="side">
-          {signal && <Signal title={signal.title}>{signal.body}</Signal>}
-          <WatchList items={watch} />
-        </aside>
+        />
       </div>
 
-      <Panel
-        eyebrow="Hourly schedule"
-        title="Forecast, range and lead time by hour"
-        actions={
-          <button type="button" className="btn" onClick={onToggleTable} aria-expanded={showTable}>
-            {showTable ? 'Hide' : 'Show'}
-          </button>
+      <Card
+        title={
+          <>
+            Wind generation <span className="muted">MW, hourly</span>
+          </>
+        }
+        tools={
+          <>
+            <label className="toggle">
+              <input type="checkbox" checked={showRuns} onChange={(e) => setShowRuns(e.target.checked)} />
+              Other runs
+            </label>
+            <label className="toggle">
+              <input type="checkbox" checked={showActual} onChange={(e) => setShowActual(e.target.checked)} />
+              Outturn
+            </label>
+            <IconButton label="Download hourly CSV" onClick={downloadCsv}>
+              <DownloadIcon />
+            </IconButton>
+          </>
         }
       >
-        {showTable && (
+        <div className="chart chart--tall">
+          <ResponsiveContainer>
+            <ComposedChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+              <CartesianGrid stroke="var(--grid)" vertical={false} />
+              <XAxis dataKey="label" tick={{ fontSize: 11 }} interval={2} stroke="var(--axis)" tickLine={false} />
+              <YAxis
+                tick={{ fontSize: 11 }}
+                stroke="var(--axis)"
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(v: number) => v.toLocaleString('en-GB')}
+                domain={[0, (max: number) => Math.ceil(max / 5000) * 5000]}
+                tickCount={6}
+                width={52}
+              />
+              <Tooltip content={<BriefTooltip />} />
+              <Area dataKey="band" stroke="none" fill="var(--c-band)" isAnimationActive={false} />
+              {showRuns &&
+                brief.runs.map((r, j) => (
+                  <Line
+                    key={r.published}
+                    dataKey={`run${j}`}
+                    stroke={r.usable ? 'var(--c-run)' : 'var(--c-late)'}
+                    strokeDasharray={r.usable ? undefined : '3 3'}
+                    strokeWidth={1}
+                    dot={false}
+                    isAnimationActive={false}
+                    connectNulls
+                  />
+                ))}
+              <Line dataKey="forecast" stroke="var(--c-forecast)" strokeWidth={2} dot={false} isAnimationActive={false} />
+              {showActual && (
+                <Line dataKey="actual" stroke="var(--c-actual)" strokeWidth={1.5} dot={false} isAnimationActive={false} />
+              )}
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+        <Legend
+          items={[
+            { label: `Forecast (${ukStamp(used)} run)`, className: 'sw-forecast' },
+            { label: 'P10–P90', className: 'sw-band' },
+            ...(showActual ? [{ label: 'Outturn', className: 'sw-actual' }] : []),
+            ...(showRuns
+              ? [
+                  { label: 'Earlier runs', className: 'sw-run' },
+                  { label: 'After gate closure', className: 'sw-late' },
+                ]
+              : []),
+          ]}
+        />
+      </Card>
+
+      <div className="split">
+        <Card
+          flush
+          title={
+            <>
+              Forecast runs <span className="muted">published before delivery</span>
+            </>
+          }
+        >
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>UK time</th>
+                  <th>Published</th>
+                  <th>Lead to 00:00</th>
+                  <th>Day total</th>
+                  <th>Change, GWh</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {runs.map((r) => (
+                  <tr key={r.published} className={r.published === used ? 'is-used' : r.usable ? '' : 'is-late'}>
+                    <td>{ukStamp(r.published)}</td>
+                    <td>{r.lead.toFixed(1)} h</td>
+                    <td>{r.full ? `${gwhValue(r.total)} GWh` : <span className="muted">{r.covered}/{hours.length} h</span>}</td>
+                    <td className={r.delta == null || Math.abs(r.delta) < 50 ? '' : r.delta < 0 ? 'neg' : 'pos'}>
+                      {r.delta == null ? '' : Math.abs(r.delta) < 50 ? '0.0' : `${r.delta > 0 ? '+' : ''}${gwhValue(r.delta)}`}
+                    </td>
+                    <td>
+                      {r.published === used ? (
+                        <span className="tag tag--used">used</span>
+                      ) : r.usable ? (
+                        ''
+                      ) : (
+                        <span className="tag">after GC</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+
+        <Card flush title="Hourly values">
+          <div className="table-wrap table-wrap--scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Hour</th>
                   <th>Forecast</th>
                   <th>P10</th>
                   <th>P90</th>
-                  <th>Lead</th>
-                  {showActual && <th>Outturn</th>}
-                  {showActual && <th>Error</th>}
+                  {showActual && <th>Outturn*</th>}
                 </tr>
               </thead>
               <tbody>
                 {hours.map((h) => (
                   <tr key={h.time}>
                     <td>{ukHour(h.time)}</td>
-                    <td>{mw(h.forecast)}</td>
-                    <td>{mw(h.p10)}</td>
-                    <td>{mw(h.p90)}</td>
-                    <td>{h.horizon_h != null ? `${h.horizon_h} h` : '–'}</td>
-                    {showActual && <td>{mw(h.actual)}</td>}
-                    {showActual && (
-                      <td>
-                        {h.forecast != null && h.actual != null ? signed(mw(h.forecast - h.actual), h.forecast - h.actual) : '–'}
-                      </td>
-                    )}
+                    <td>{fmt(h.forecast)}</td>
+                    <td>{fmt(h.p10)}</td>
+                    <td>{fmt(h.p90)}</td>
+                    {showActual && <td>{fmt(h.actual)}</td>}
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        )}
-      </Panel>
+        </Card>
+      </div>
+
+      <p className="footnote">
+        * Outturn is shown for review; it wasn’t known when the power was bought. Lead times in this day run{' '}
+        {leads.length ? `${Math.min(...leads)}–${Math.max(...leads)}` : '–'} h. P10/P90 come from the errors of the
+        forecast held at gate closure on the other {brief.calibration_days} pilot days, in 6-hour lead-time buckets.
+      </p>
     </>
   );
 }
+
+const fmt = (v: number | null) => (v == null ? '–' : Math.round(v).toLocaleString('en-GB'));
 
 type TooltipProps = { active?: boolean; label?: string; payload?: { dataKey: string; value: unknown }[] };
 
@@ -351,14 +329,14 @@ function BriefTooltip({ active, label, payload }: TooltipProps) {
   const band = get('band') as [number, number] | undefined;
   return (
     <div className="tooltip">
-      <div className="tooltip__title">{label} UK</div>
-      <div>Forecast: {mw(get('forecast') as number)}</div>
+      <div className="tooltip__title">{label}</div>
+      <div>Forecast {mw(get('forecast') as number)}</div>
       {band && (
-        <div>
-          P10–P90: {mw(band[0])} – {mw(band[1])}
+        <div className="muted">
+          P10–P90 {fmt(band[0])}–{fmt(band[1])}
         </div>
       )}
-      {get('actual') != null && <div>Outturn: {mw(get('actual') as number)}</div>}
+      {get('actual') != null && <div>Outturn {mw(get('actual') as number)}</div>}
     </div>
   );
 }

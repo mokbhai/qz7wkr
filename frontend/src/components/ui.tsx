@@ -1,125 +1,56 @@
 import type { ReactNode } from 'react';
 
-export function Eyebrow({ children }: { children: ReactNode }) {
-  return <div className="eyebrow">{children}</div>;
-}
-
-export function ViewHead({ eyebrow, title, lede }: { eyebrow: string; title: ReactNode; lede?: ReactNode }) {
+/** A headline number with its unit set smaller, e.g. 278.6 GWh. */
+export function Stat({ label, value, unit, note }: { label: ReactNode; value: string; unit?: string; note?: ReactNode }) {
   return (
-    <header className="view-head">
-      <Eyebrow>{eyebrow}</Eyebrow>
-      <h2>{title}</h2>
-      {lede && <p>{lede}</p>}
-    </header>
-  );
-}
-
-export function Kpi({
-  label,
-  value,
-  sub,
-  tone,
-}: {
-  label: string;
-  value: string;
-  sub?: ReactNode;
-  tone?: 'muted' | 'brand';
-}) {
-  return (
-    <div className={`kpi${tone ? ` kpi--${tone}` : ''}`}>
-      <div className="kpi__label">{label}</div>
-      <div className="kpi__value">{value}</div>
-      {sub && <div className="kpi__sub">{sub}</div>}
+    <div className="stat">
+      <div className="stat__label">{label}</div>
+      <div className="stat__value">
+        {value}
+        {unit && <span className="stat__unit">{unit}</span>}
+      </div>
+      {note && <div className="stat__note">{note}</div>}
     </div>
   );
 }
 
-export function Panel({
-  eyebrow,
+export function Card({
   title,
-  note,
-  actions,
+  tools,
   children,
+  flush,
 }: {
-  eyebrow?: string;
-  title: string;
-  note?: ReactNode;
-  actions?: ReactNode;
+  title: ReactNode;
+  tools?: ReactNode;
   children: ReactNode;
+  flush?: boolean;
 }) {
   return (
-    <section className="panel">
-      <header className="panel__head">
-        <div>
-          {eyebrow && <Eyebrow>{eyebrow}</Eyebrow>}
-          <h3 className="panel__title">{title}</h3>
-          {note && <p className="panel__note">{note}</p>}
-        </div>
-        {actions && <div className="panel__actions">{actions}</div>}
+    <section className={`card${flush ? ' card--flush' : ''}`}>
+      <header className="card__head">
+        <h2 className="card__title">{title}</h2>
+        {tools && <div className="card__tools">{tools}</div>}
       </header>
       {children}
     </section>
   );
 }
 
-export function Signal({ title, children }: { title: string; children: ReactNode }) {
+export function IconButton({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) {
   return (
-    <section className="signal">
-      <Eyebrow>Forecast signal</Eyebrow>
-      <h3>{title}</h3>
-      <p>{children}</p>
-    </section>
+    <button type="button" className="icon-btn" aria-label={label} title={label} onClick={onClick}>
+      {children}
+    </button>
   );
 }
 
-export function WatchList({ items }: { items: { text: ReactNode; detail?: ReactNode }[] }) {
-  if (items.length === 0) return null;
-  return (
-    <section className="watch">
-      <Eyebrow>Watch list</Eyebrow>
-      <ul>
-        {items.map((item, i) => (
-          <li key={i}>
-            <span>
-              {item.text}
-              {item.detail && <small>{item.detail}</small>}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-export function Segmented<T extends string>({
-  value,
-  options,
-  onChange,
-  label,
-}: {
-  value: T;
-  options: { value: T; label: string; title?: string }[];
-  onChange: (v: T) => void;
-  label: string;
-}) {
-  return (
-    <div className="segmented" role="radiogroup" aria-label={label}>
-      {options.map((o) => (
-        <button
-          key={o.value}
-          type="button"
-          role="radio"
-          aria-checked={value === o.value}
-          title={o.title}
-          className={value === o.value ? 'is-active' : ''}
-          onClick={() => onChange(o.value)}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
+export const DownloadIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <path d="M7 10l5 5 5-5" />
+    <path d="M12 15V3" />
+  </svg>
+);
 
 export function Status({ state }: { state: { status: 'loading' } | { status: 'error'; message: string } }) {
   if (state.status === 'error') return <div className="status status--error">Couldn’t load data: {state.message}</div>;

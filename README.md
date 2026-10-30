@@ -58,7 +58,7 @@ Why it is built this way:
 - **No pandas or numpy.** About 20k forecast points fit comfortably in plain Python. The bisect index answers "latest forecast as of T" in O(log n). Leaving out scientific libraries keeps the Vercel function small and cold starts fast. `quantile()` matches numpy's default linear method, and a test pins that.
 - **Pure domain layer.** `analysis.py` has no HTTP or IO code, so unit tests cover it with tiny hand-built fixtures. `main.py` only validates input, caches, and serialises.
 - **Input validation at the edge.** Dates outside the pilot window, reversed ranges, and lead times outside 0–48 h return 422 with a readable message.
-- **Frontend.** One typed client (`api.ts`). Its `useApi` hook aborts stale requests, so stepping quickly through days never shows old data. All times display in UK local time. Colours are CSS tokens with a dark-mode set.
+- **Frontend.** One typed client (`api.ts`). Its `useApi` hook aborts stale requests, so stepping quickly through days never shows old data. All times display in UK local time. ← / → step through delivery days. The look follows the client's own product (Inter, one accent green, plain tool layout) and is light-only.
 
 ## API
 
@@ -93,7 +93,7 @@ Interactive docs: `/docs` (FastAPI Swagger UI).
 │   │   ├── api.ts               Typed API client + useApi hook
 │   │   ├── format.ts            UK-time and unit formatting, CSV
 │   │   ├── format.test.ts       vitest
-│   │   ├── styles.css           Design tokens (light/dark) and layout
+│   │   ├── styles.css           Design tokens and layout (light-only)
 │   │   └── components/          BriefView, AccuracyView, shared UI pieces
 │   ├── index.html, vite.config.ts, tsconfig.json, package.json
 ├── Dockerfile                   Multi-stage: build React → serve app + API with uvicorn
