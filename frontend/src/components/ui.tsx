@@ -1,4 +1,20 @@
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+
+/** Whether a CSS media query currently matches. Reads false when `window` or `matchMedia` is unavailable. */
+export function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(() => typeof window !== 'undefined' && !!window.matchMedia?.(query).matches);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mql = window.matchMedia(query);
+    const onChange = () => setMatches(mql.matches);
+    onChange();
+    mql.addEventListener('change', onChange);
+    return () => mql.removeEventListener('change', onChange);
+  }, [query]);
+
+  return matches;
+}
 
 /** A headline number with its unit set smaller, e.g. 278.6 GWh. */
 export function Stat({ label, value, unit, note }: { label: ReactNode; value: string; unit?: string; note?: ReactNode }) {

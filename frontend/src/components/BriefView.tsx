@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { apiUrl, useApi, type Brief, type CutoffKey, type Meta } from '../api';
 import { addDays, dateRange, gwh, mw, toCsv, ukDay, ukHour, ukStamp } from '../format';
-import { Card, DownloadIcon, IconButton, Legend, Stat, Status } from './ui';
+import { Card, DownloadIcon, IconButton, Legend, Stat, Status, useMediaQuery } from './ui';
 
 const gwhValue = (mwh: number | null) => (mwh == null ? '–' : (mwh / 1000).toFixed(1));
 
@@ -101,6 +101,8 @@ function BriefBody({
 }) {
   const { totals_mwh: t, hours } = brief;
   const used = brief.runs_used[0];
+  // Every 3 h on desktop, every 6 h on phones (the styles.css breakpoint).
+  const narrow = useMediaQuery('(max-width: 640px)');
   const leads = hours.map((h) => h.horizon_h).filter((h): h is number => h != null);
 
   const data = hours.map((h, i) => {
@@ -197,14 +199,7 @@ function BriefBody({
           <ResponsiveContainer>
             <ComposedChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
               <CartesianGrid stroke="var(--grid)" vertical={false} />
-              <XAxis
-                dataKey="label"
-                tick={{ fontSize: 11 }}
-                interval="preserveStartEnd"
-                minTickGap={72}
-                stroke="var(--axis)"
-                tickLine={false}
-              />
+              <XAxis dataKey="label" tick={{ fontSize: 11 }} interval={narrow ? 5 : 2} stroke="var(--axis)" tickLine={false} />
               <YAxis
                 tick={{ fontSize: 11 }}
                 stroke="var(--axis)"
