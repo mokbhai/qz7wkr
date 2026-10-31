@@ -16,10 +16,10 @@ A web app for a UK utility's day-ahead power desk. It answers two questions for 
 |---|---|
 | Typical miss at decision time | **2.02 GW MAE** (18% of mean wind output); P90 absolute error 4.15 GW |
 | Systematic bias | Forecast **over-predicts by +1.75 GW** on average, at every lead time from 0 to 48 h |
-| Uncertainty band | Leave-one-day-out P10–P90 band held **78% of outturns** (target 80%) |
+| Uncertainty band | Leave-one-day-out P10–P90 band held **78% of hourly outturns** (target 80%) |
 | Waiting for N2EX (09:50) | Uses the 09:30 forecast run; MAE only **1.3% lower** than at 09:20 |
 
-The bias is the actionable result. Committing against the raw forecast leaves the book short of wind on most days, so a buyer should plan on the band. Its likely cause is that WINDFOR does not capture curtailment and constraint actions, which show up in the metered outturn. With wind data alone, this pilot can show the effect but cannot prove the cause.
+The bias is the actionable result. Committing against the raw forecast leaves the book short of wind on most days. The Low-wind case and High-wind case support scenario analysis: they sum hourly P10/P90 bounds and are not percentiles of daily energy or daily guarantees. Curtailment and constraint actions are an unconfirmed explanation for the bias; wind data alone cannot establish the cause.
 
 ## Domain model and definitions
 
@@ -33,7 +33,7 @@ The bias is the actionable result. Committing against the raw forecast leaves th
 | Actual | FUELHH `fuelType=WIND` generation for the half-hour starting at `t`. WINDFOR is hourly, so the comparison uses the 744 hourly instants where both exist. |
 | Error | `forecast - actual` (MW). Positive means wind was over-forecast, which leaves the buyer **short**. |
 | P10 / P90 band | `forecast - quantile(error, 0.9 / 0.1)`, using decision-time errors from the **other** pilot days in the same 6-hour lead-time bucket (leave-one-day-out, so a day never calibrates its own band), clamped at 0. |
-| Energy totals | The sum of hourly MW values for the day, shown as GWh. |
+| Energy totals | The sum of hourly MW values for the day, shown as GWh. Low-wind case / High-wind case sum hourly P10/P90 bounds, not daily-energy percentiles. Outturn* is marked ≈ because it uses the half-hour starting each hour, the points the forecast is scored on. |
 
 WINDFOR runs also restate a few hours that have already passed (target before publish time). These are not forecasts and are dropped at load time.
 
@@ -48,8 +48,8 @@ Elexon BMRS API ──(python -m app.ingest)──▶ backend/data/elexon_wind_2
                            ── main.py      FastAPI: validation, caching, JSON; serves the SPA in Docker
                                                      │ /api/*
                                                      ▼
-              frontend/src ── BriefView     Day-ahead brief (decision view, CSV export)
-                           ── AccuracyView  Forecast accuracy (metrics + 4 charts + hardest days)
+              frontend/src ── BriefView     Daily brief (decision view, CSV export)
+                           ── AccuracyView  Accuracy (metrics + 4 charts + worst-day links)
 ```
 
 Why it is built this way:
@@ -58,7 +58,7 @@ Why it is built this way:
 - **No pandas or numpy.** About 20k forecast points fit comfortably in plain Python. The bisect index answers "latest forecast as of T" in O(log n). Leaving out scientific libraries keeps the Vercel function small and cold starts fast. `quantile()` matches numpy's default linear method, and a test pins that.
 - **Pure domain layer.** `analysis.py` has no HTTP or IO code, so unit tests cover it with tiny hand-built fixtures. `main.py` only validates input, caches, and serialises.
 - **Input validation at the edge.** Dates outside the pilot window, reversed ranges, and lead times outside 0–48 h return 422 with a readable message.
-- **Frontend.** One typed client (`api.ts`). Its `useApi` hook aborts stale requests, so stepping quickly through days never shows old data. All times display in UK local time. ← / → step through delivery days. The look follows the client's own product (Inter, one accent green, plain tool layout) and is light-only.
+- **Frontend.** One typed client (`api.ts`) caches the immutable pilot responses by URL, shares in-flight requests, and prefetches adjacent briefs. `useApi` returns cached data or a loading state for the current URL and ignores obsolete subscribers, so a new selection never displays another selection's numbers. `ChartFrame` measures chart containers with `ResizeObserver` and supplies numeric dimensions. `urlState.ts` validates and serialises selections; push/replace history, `popstate`, and Copy link support sharing and Back/Forward. Tabs have accessible roles and keyboard focus handling; charts have summaries and keyboard support, and day shortcuts leave controls and scroll regions alone. All times display in UK local time. The look follows the client's own product (Inter, one accent green, plain tool layout) and is light-only.
 
 ## API
 
@@ -89,12 +89,31 @@ Interactive docs: `/docs` (FastAPI Swagger UI).
 │   └── tests/                   pytest: domain unit tests, API tests on real data
 ├── frontend/
 │   ├── src/
-│   │   ├── App.tsx              Shell: header, gate-closure switch, tabs
-│   │   ├── api.ts               Typed API client + useApi hook
+│   │   ├── App.tsx              Shell: header, gate-closure switch, accessible tabs, history, Copy link
+│   │   ├── api.ts               Typed client, URL-keyed useApi, response cache, prefetch
+│   │   ├── api.test.ts          Cache sharing, retry and empty metrics tests
+│   │   ├── urlState.ts          Selection parsing, validation and query-string serialisation
+│   │   ├── urlState.test.ts     URL round trips, bounds and invalid-input tests
 │   │   ├── format.ts            UK-time and unit formatting, CSV
 │   │   ├── format.test.ts       vitest
 │   │   ├── styles.css           Design tokens and layout (light-only)
-│   │   └── components/          BriefView, AccuracyView, shared UI pieces
+│   │   └── components/
+│   │       ├── BriefView.tsx    Daily brief orchestration, adjacent-day prefetch, scoped day keys
+│   │       ├── BriefView.test.ts  Day-shortcut keyboard guards
+│   │       ├── AccuracyView.tsx  Accuracy filters, loading and chart orchestration
+│   │       ├── ui.tsx           ChartFrame, tooltips, status/retry, cards and shared controls
+│   │       ├── brief/
+│   │       │   ├── WindChart.tsx, WindChart.test.tsx  Band, overlays, markers, chart rendering tests
+│   │       │   ├── ForecastRunsTable.tsx, HourlyTable.tsx  Run history, hourly values, CSV control
+│   │       │   ├── helpers.ts, helpers.test.ts  Revision, band window, CSV and axis helpers/tests
+│   │       │   └── brief.css    Brief layout, chart legends and responsive tables
+│   │       └── accuracy/
+│   │           ├── MetricsRow.tsx, PilotNotes.tsx  Metrics and cutoff-bound pilot findings
+│   │           ├── ForecastVsOutturnChart.tsx, LeadTimeChart.tsx
+│   │           ├── ErrorHistogram.tsx, ByHourChart.tsx
+│   │           ├── WorstDaysTable.tsx  Links to each delivery day's brief
+│   │           ├── helpers.ts, helpers.test.ts  Histogram, lead-time, summary and tick helpers/tests
+│   │           └── accuracy.css  Accuracy charts, data tables and responsive filters
 │   ├── index.html, vite.config.ts, tsconfig.json, package.json
 ├── Dockerfile                   Multi-stage: build React → serve app + API with uvicorn
 ├── docker-compose.yml           app (prod-like), dev profile (hot reload), tools profile (ingest)
