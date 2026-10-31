@@ -1,0 +1,100 @@
+.accuracy-view {
+  --accuracy-bias: #b4532a;
+}
+
+.accuracy-definition {
+  margin: -6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.accuracy-view .accuracy-notes {
+  max-width: none;
+  gap: 3px;
+  font-size: 13px;
+}
+
+.accuracy-view .accuracy-chart-note {
+  margin-top: 6px;
+}
+
+.accuracy-view .accuracy-sw-mae {
+  background: var(--c-forecast);
+  height: 2px;
+}
+
+.accuracy-view .accuracy-sw-p90 {
+  height: 1.25px;
+  background: repeating-linear-gradient(90deg, var(--ink) 0 5px, transparent 5px 8px);
+}
+
+.accuracy-view .accuracy-sw-bias {
+  height: 1.25px;
+  background: repeating-linear-gradient(90deg, var(--accuracy-bias) 0 2px, transparent 2px 5px);
+}
+
+.accuracy-view .accuracy-sw-hour-mae {
+  height: 8px;
+  background: var(--c-band-strong);
+  border: 0.5px solid var(--c-forecast);
+}
+
+.accuracy-data {
+  margin-top: 10px;
+  border-top: 1px solid var(--border);
+  padding-top: 7px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.accuracy-data summary {
+  cursor: pointer;
+  width: fit-content;
+}
+
+.accuracy-data summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.accuracy-data table {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.accuracy-caption {
+  text-align: left;
+  padding: 6px 14px;
+  color: var(--muted);
+}
+
+.accuracy-worst th,
+.accuracy-worst td {
+  padding: 7px 8px;
+  font-size: 12px;
+}
+
+.accuracy-worst th:first-child,
+.accuracy-worst td:first-child {
+  padding-left: 14px;
+}
+
+.accuracy-worst th:last-child,
+.accuracy-worst td:last-child {
+  padding-right: 14px;
+}
+
+@media (max-width: 640px) {
+  .accuracy-view .filters label {
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+
+  .accuracy-view .filters select {
+    max-width: 100%;
+  }
+
+  .accuracy-view .filters__range input {
+    min-width: 100px;
+  }
+}
