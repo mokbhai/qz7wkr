@@ -2,10 +2,13 @@ import { Bar, CartesianGrid, ComposedChart, Line, ReferenceLine, Tooltip, XAxis,
 import type { Accuracy } from '../../api';
 import { gw, ukHour } from '../../format';
 import { axisTick, Card, ChartFrame, ChartTooltip, Legend } from '../ui';
-import { byHourSummary, errorTone, signedGw } from './helpers';
+import { byHourSummary, errorTone, niceTicks, powerTicks, signedGw } from './helpers';
 
 export function ByHourChart({ points, deliveryDate }: { points: Accuracy['by_hour']; deliveryDate: string }) {
   const data = points.map((point) => ({ ...point, mae: point.mae / 1000, bias: point.bias / 1000 }));
+  const values = data.flatMap((point) => [point.mae, point.bias]);
+  const positiveTicks = niceTicks(Math.max(0, ...values));
+  const ticks = powerTicks([...values, positiveTicks[positiveTicks.length - 1]], positiveTicks[1]);
   const hourLabel = (hour: number) => ukHour(`${deliveryDate}T${String(hour).padStart(2, '0')}:00:00Z`);
   return (
     <Card title="By hour of day · GW">
@@ -17,7 +20,8 @@ export function ByHourChart({ points, deliveryDate }: { points: Accuracy['by_hou
                 <ComposedChart accessibilityLayer width={width} height={height} data={data} margin={{ top: 16, right: 8, bottom: 4, left: 0 }}>
                   <CartesianGrid stroke="var(--grid)" vertical={false} />
                   <XAxis dataKey="hour" tick={axisTick} stroke="var(--axis)" tickLine={false} tickFormatter={(hour: number) => hourLabel(hour).slice(0, 2)} interval={2} />
-                  <YAxis tick={axisTick} stroke="var(--axis)" tickLine={false} axisLine={false} width={36} />
+                  <YAxis tick={axisTick} stroke="var(--axis)" tickLine={false} axisLine={false} width={36}
+                    domain={[ticks[0], ticks[ticks.length - 1]]} ticks={ticks} />
                   <ReferenceLine y={0} stroke="var(--axis)" />
                   <Tooltip content={({ active, payload }) => {
                     const point = payload?.[0]?.payload as typeof data[number] | undefined;

@@ -25,10 +25,13 @@ describe('URL state', () => {
     expect(parseState('?day=not-a-date&start=2027-01-02&end=2025-02-01', bounds)).toEqual(defaults);
   });
 
-  it('clamps the horizon including zero', () => {
-    expect(parseState('?horizon=-1', bounds).horizon).toBe(0);
-    expect(parseState('?horizon=99', bounds).horizon).toBe(48);
-    expect(parseState('?horizon=0', bounds).horizon).toBe(0);
+  it('accepts only integer horizons from zero through 48', () => {
+    for (const horizon of [0, 1, 24, 48]) {
+      expect(parseState(`?mode=horizon&horizon=${horizon}`, bounds).horizon).toBe(horizon);
+    }
+    for (const horizon of [-1, 99, 24.5, 0.5, 47.9]) {
+      expect(parseState(`?mode=horizon&horizon=${horizon}`, bounds).horizon).toBe(24);
+    }
   });
 
   it('swaps reversed range endpoints', () => {

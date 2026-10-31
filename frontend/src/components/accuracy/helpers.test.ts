@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Accuracy, HorizonPoint } from '../../api';
 import {
   byHourSummary, errorTone, forecastSummary, histogramBarWidth, histogramGeometry, histogramInterval,
-  histogramSummary, leadHours, leadRange, leadSummary, number, powerTicks, signedGw,
+  histogramSummary, leadHours, leadRange, leadSummary, niceTicks, number, powerTicks, signedGw,
 } from './helpers';
 
 const series: Accuracy['series'] = [
@@ -84,6 +84,29 @@ describe('accessible summaries', () => {
 });
 
 describe('metric presentation', () => {
+  it('uses round steps with four to six non-negative ticks for GW error ranges', () => {
+    for (const max of [0, 0.1, 0.9, 1.3, 2.6, 4.1, 7.4, 9.9, 12, 24.9]) {
+      const ticks = niceTicks(max);
+      const step = ticks[1];
+      expect(ticks[0]).toBe(0);
+      expect(ticks.at(-1)).toBeGreaterThanOrEqual(max);
+      expect(ticks.length).toBeGreaterThanOrEqual(4);
+      expect(ticks.length).toBeLessThanOrEqual(6);
+      expect([0.25, 0.5, 1, 2, 5]).toContain(step);
+      expect(ticks.every((tick, index) => tick === index * step)).toBe(true);
+    }
+    expect(niceTicks(2.6)).toEqual([0, 1, 2, 3]);
+  });
+
+  it('handles empty or invalid maxima and keeps signed bias on the same round step', () => {
+    for (const max of [-1, NaN, Infinity, -Infinity]) {
+      expect(niceTicks(max)).toEqual([0, 0.25, 0.5, 0.75]);
+    }
+    const ticks = niceTicks(2.6);
+    expect(powerTicks([-0.65, 2.6, ticks[ticks.length - 1]], ticks[1])).toEqual([-1, 0, 1, 2, 3]);
+    expect(niceTicks(30).at(-1)).toBe(30);
+  });
+
   it('creates readable power ticks covering positive, negative and empty values', () => {
     expect(powerTicks([21.4, 0.8], 5)).toEqual([0, 5, 10, 15, 20, 25]);
     expect(powerTicks([4.7, -1.1], 1)).toEqual([-2, -1, 0, 1, 2, 3, 4, 5]);

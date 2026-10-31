@@ -19,6 +19,13 @@ export function powerTicks(values: number[], step: number) {
   return Array.from({ length: Math.round((max - min) / step) + 1 }, (_, index) => min + index * step);
 }
 
+export function niceTicks(max: number) {
+  const upper = Number.isFinite(max) ? Math.max(0, max) : 0;
+  const step = [0.25, 0.5, 1, 2, 5].find((value) => Math.ceil(upper / value) <= 5) ?? 5;
+  const intervals = Math.max(3, Math.ceil(upper / step));
+  return Array.from({ length: intervals + 1 }, (_, index) => index * step);
+}
+
 export function leadRange(series: Accuracy['series']): [number, number] | null {
   const leads = series.map(leadHours).filter((lead) => Number.isFinite(lead) && lead >= 0);
   return leads.length ? [Math.min(...leads), Math.max(...leads)] : null;

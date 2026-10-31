@@ -14,8 +14,8 @@ export function LeadTimeChart({ state, series, mode, marker }: {
   const range = mode === 'decision' ? leadRange(series) : null;
   const data = points.map((point) => ({ ...point, mae: point.mae / 1000, p90_abs: point.p90_abs / 1000, bias: point.bias / 1000 }));
   const ticks = powerTicks(data.flatMap((point) => [point.mae, point.p90_abs, point.bias]), 1);
-  const domain: [number, number] = [Math.min(0, ...points.map((point) => point.horizon_h), range?.[0] ?? 0),
-    Math.max(0, ...points.map((point) => point.horizon_h), range?.[1] ?? 0, marker ?? 0)];
+  const maxHorizon = Math.max(0, ...points.map((point) => point.horizon_h), range?.[1] ?? 0, marker ?? 0);
+  const horizonTicks = Array.from({ length: Math.floor(maxHorizon / 6) + 1 }, (_, index) => index * 6);
 
   return (
     <Card title="Error vs lead time · GW">
@@ -27,8 +27,8 @@ export function LeadTimeChart({ state, series, mode, marker }: {
                 {({ width, height }) => (
                   <LineChart accessibilityLayer width={width} height={height} data={data} margin={{ top: 28, right: 14, bottom: 4, left: 0 }}>
                     <CartesianGrid stroke="var(--grid)" vertical={false} />
-                    <XAxis dataKey="horizon_h" type="number" domain={domain} tick={axisTick} stroke="var(--axis)" tickLine={false}
-                      tickFormatter={(value: number) => `${value}h`} minTickGap={20} allowDecimals={false} />
+                    <XAxis dataKey="horizon_h" type="number" domain={[0, maxHorizon]} ticks={horizonTicks} interval={0}
+                      tick={axisTick} stroke="var(--axis)" tickLine={false} tickFormatter={(value: number) => `${value}h`} />
                     <YAxis tick={axisTick} stroke="var(--axis)" tickLine={false} axisLine={false} width={36} domain={[ticks[0], ticks[ticks.length - 1]]} ticks={ticks} />
                     {range && <ReferenceArea x1={range[0]} x2={range[1]} fill="var(--ink)" fillOpacity={0.045} strokeOpacity={0} />}
                     {marker != null && <ReferenceLine x={marker} stroke="var(--axis)" strokeDasharray="2 3"

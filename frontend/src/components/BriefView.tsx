@@ -5,8 +5,15 @@ import { Stat, Status } from './ui';
 import { ForecastRunsTable } from './brief/ForecastRunsTable';
 import { HourlyTable } from './brief/HourlyTable';
 import { WindChart } from './brief/WindChart';
-import { buildCsvRows, csvFilename, gwhValue, runRevision, signedValue } from './brief/helpers';
+import { buildCsvRows, csvFilename, gwhValue, revisionSummary, runRevision } from './brief/helpers';
 import './brief/brief.css';
+
+export function shouldStepDay(event: Pick<KeyboardEvent, 'key' | 'defaultPrevented' | 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey' | 'target'>) {
+  if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return false;
+  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return false;
+  const target = event.target as Element | null;
+  return !target?.closest?.('.table-wrap, [role="region"], [role="application"], [role="img"], a[href], details, summary, [role="tablist"], button, input, select, textarea, [contenteditable]:not([contenteditable="false"])');
+}
 
 export function BriefView({ meta, cutoff, delivery, setDelivery }: {
   meta: Meta;
@@ -30,11 +37,10 @@ export function BriefView({ meta, cutoff, delivery, setDelivery }: {
     }
   }, [state.status, idx, deliveries, cutoff]);
 
-  // ← / → step through days, unless the user is typing in a control.
+  // ← / → step through days outside controls and regions with their own keys.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
-      if (e.target instanceof Element && e.target.closest('[role="tablist"], button, input, select, textarea, [contenteditable]:not([contenteditable="false"])')) return;
+      if (!shouldStepDay(e)) return;
       if (e.key === 'ArrowLeft' && idx > 0) {
         e.preventDefault();
         setDelivery(deliveries[idx - 1]);
@@ -156,13 +162,7 @@ function BriefBody({ brief, cutoff, coverage, showActual, showPrevious, showLate
         } />
       </div>
 
-      <p className="brief-revision">
-        {revision ? <>
-          vs {ukHour(revision.previous.published)} run: {signedValue(revision.deltaMwh / 1000, 1)} GWh
-          {revision.overlap < brief.hours.length && <> over {revision.overlap} of {brief.hours.length} h</>}
-          {' · '}largest hourly change {signedValue(revision.largest.delta)} MW at {ukHour(revision.largest.time)}
-        </> : 'no earlier run covers this day'}
-      </p>
+      <p className="brief-revision">{revisionSummary(revision, brief.hours.length)}</p>
 
       <WindChart brief={brief} previous={revision?.previous} showPrevious={showPrevious} setShowPrevious={setShowPrevious}
         showLater={showLater} setShowLater={setShowLater} showActual={showActual} setShowActual={setShowActual} />

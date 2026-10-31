@@ -1,5 +1,5 @@
 import type { Brief, BriefHour, CutoffKey } from '../../api';
-import { ukHour } from '../../format';
+import { gw, gwh, ukDay, ukHour, ukStamp } from '../../format';
 
 const HOUR_MS = 3_600_000;
 export type ForecastRun = Brief['runs'][number];
@@ -25,6 +25,25 @@ export function runRevision(brief: Brief) {
   if (!changes.length) return null;
   const largest = changes.reduce((best, change) => Math.abs(change.delta) > Math.abs(best.delta) ? change : best);
   return { previous, overlap: changes.length, deltaMwh: changes.reduce((sum, change) => sum + change.delta, 0), largest };
+}
+
+export function revisionSummary(revision: ReturnType<typeof runRevision>, hours: number) {
+  if (!revision) return 'no earlier run covers this day';
+  const run = `${ukHour(revision.previous.published)} run`;
+  if (Math.abs(revision.deltaMwh) < 50 && Math.abs(revision.largest.delta) < 1) return `Unchanged from the ${run}`;
+  const overlap = revision.overlap < hours ? ` over ${revision.overlap} of ${hours} h` : '';
+  const largest = Number(revision.largest.delta.toFixed(0)) !== 0
+    ? ` · largest hourly change ${signedValue(revision.largest.delta)} MW at ${ukHour(revision.largest.time)}` : '';
+  return `vs ${run}: ${signedValue(revision.deltaMwh / 1000, 1)} GWh${overlap}${largest}`;
+}
+
+export function windSummary(brief: Brief, showActual: boolean) {
+  const forecasts = brief.hours.flatMap((hour) => hour.forecast == null ? [] : [hour.forecast]);
+  const run = brief.runs_used.length === 1 ? `the ${ukStamp(brief.runs_used[0]).replace(', ', ' ')} run`
+    : brief.runs_used.length ? 'the latest run per hour' : 'no eligible run';
+  const range = forecasts.length ? `, ranging ${(Math.min(...forecasts) / 1000).toFixed(1)} to ${gw(Math.max(...forecasts), 1)}` : '';
+  const outturn = showActual && brief.totals_mwh.actual != null ? `; outturn ${gwh(brief.totals_mwh.actual, 0)}` : '';
+  return `Wind forecast for ${ukDay(brief.delivery_date)} from ${run}: ${gwh(brief.totals_mwh.forecast, 0)}${range}${outturn}.`;
 }
 
 export function widestBandWindow(hours: BriefHour[]) {

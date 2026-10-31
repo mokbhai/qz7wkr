@@ -23,6 +23,7 @@ export function WorstDaysTable({ daily, linkToDay, onOpenDay }: { daily: Accurac
           </table>
         </div>
       )}
+      {worst.length > 0 && <p className="footnote accuracy-worst-note">Outturn ≈: energy from the half-hour starting each hour, the points the forecast is scored on.</p>}
     </Card>
   );
 }

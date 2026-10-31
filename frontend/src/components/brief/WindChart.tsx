@@ -2,7 +2,7 @@ import { Area, CartesianGrid, ComposedChart, Line, ReferenceArea, ReferenceDot, 
 import type { Brief, BriefHour } from '../../api';
 import { gw, ukHour, ukStamp } from '../../format';
 import { axisTick, Card, ChartFrame, ChartTooltip, Legend, useMediaQuery } from '../ui';
-import { largestOverForecast, signedValue, widestBandWindow, windAxis, type ForecastRun } from './helpers';
+import { largestOverForecast, signedValue, widestBandWindow, windAxis, windSummary, type ForecastRun } from './helpers';
 
 export function WindChart({ brief, previous, showPrevious, setShowPrevious, showLater, setShowLater, showActual, setShowActual }: {
   brief: Brief;
@@ -51,14 +51,14 @@ export function WindChart({ brief, previous, showPrevious, setShowPrevious, show
         </label>
       </>
     }>
-      <div className="chart chart--tall">
+      <div className="chart chart--tall" role="img" aria-label={windSummary(brief, showActual)}>
         <ChartFrame height={narrow ? 280 : 340}>
           {({ width, height }) => (
-            <ComposedChart width={width} height={height} data={data} margin={{ top: 24, right: 10, bottom: 0, left: 0 }}>
+            <ComposedChart accessibilityLayer width={width} height={height} data={data} margin={{ top: 24, right: 10, bottom: 0, left: 0 }}>
               <CartesianGrid stroke="var(--grid)" vertical={false} />
               <XAxis
                 dataKey="timestamp" type="number" scale="time" ticks={ticks}
-                domain={data.length ? [data[0].timestamp, data[data.length - 1].timestamp + 3_600_000] : [0, 1]}
+                domain={['dataMin', 'dataMax']} padding={{ left: 0, right: 0 }} allowDataOverflow
                 tick={axisTick} tickFormatter={(time: number) => ukHour(new Date(time).toISOString())}
                 stroke="var(--axis)" tickLine={false}
               />

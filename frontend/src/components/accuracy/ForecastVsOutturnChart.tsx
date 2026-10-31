@@ -35,7 +35,7 @@ export function ForecastVsOutturnChart({ series }: { series: Accuracy['series'] 
           )}
         </ChartFrame>
       </div>
-      <Legend items={[{ label: 'Forecast', className: 'sw-forecast' }, { label: 'Outturn', className: 'sw-actual' }]} />
+      <Legend items={[{ label: 'Forecast', className: 'sw-forecast accuracy-sw-series' }, { label: 'Outturn', className: 'sw-actual accuracy-sw-series' }]} />
     </Card>
   );
 }

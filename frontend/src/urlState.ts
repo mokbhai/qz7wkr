@@ -51,7 +51,7 @@ export function parseState(search: string, bounds: Bounds): DeskState {
     start,
     end,
     mode: params.get('mode') === 'horizon' ? 'horizon' : fallback.mode,
-    horizon: Number.isFinite(horizon) ? Math.min(48, Math.max(0, horizon)) : fallback.horizon,
+    horizon: Number.isInteger(horizon) && horizon >= 0 && horizon <= 48 ? horizon : fallback.horizon,
   };
 }
 

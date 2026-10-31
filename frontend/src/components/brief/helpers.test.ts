@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Brief, BriefHour } from '../../api';
 import { toCsv } from '../../format';
-import { bandSpan, buildCsvRows, csvFilename, forecastRunRows, gwhValue, largestOverForecast, runRevision, signedValue, widestBandWindow, windAxis } from './helpers';
+import { bandSpan, buildCsvRows, csvFilename, forecastRunRows, gwhValue, largestOverForecast, revisionSummary, runRevision, signedValue, widestBandWindow, windAxis, windSummary } from './helpers';
 
 const used = '2026-01-14T07:30:00Z';
 const previous = '2026-01-14T04:30:00Z';
@@ -69,6 +69,52 @@ describe('run revision', () => {
     const snapshot = brief();
     snapshot.runs[0].values = [null, null, null];
     expect(runRevision(snapshot)).toBeNull();
+  });
+
+  it('describes identical and sub-threshold revisions as unchanged', () => {
+    const snapshot = brief();
+    snapshot.runs[0].values = [4000, 4000, 4000];
+    expect(revisionSummary(runRevision(snapshot), 3)).toBe('Unchanged from the 04:30 run');
+    snapshot.runs[0].values = [4000.9, 3999.2, 4000];
+    expect(revisionSummary(runRevision(snapshot), 3)).toBe('Unchanged from the 04:30 run');
+  });
+
+  it('retains cancelling hourly changes and the exact unchanged thresholds', () => {
+    const snapshot = brief();
+    snapshot.runs[0].values = [4001, 3999, 4000];
+    const revision = runRevision(snapshot)!;
+    expect(revisionSummary(revision, 3)).toBe('vs 04:30 run: +0.0 GWh · largest hourly change −1 MW at 00:00');
+    expect(revisionSummary({ ...revision, deltaMwh: 50, largest: { time: hour(0).time, delta: 0.4 } }, 3))
+      .toBe('vs 04:30 run: +0.1 GWh');
+    expect(revisionSummary({ ...revision, deltaMwh: -50, largest: { time: hour(0).time, delta: -0.4 } }, 3))
+      .toBe('vs 04:30 run: −0.1 GWh');
+  });
+
+  it('keeps existing signed and partial-overlap copy for changed runs', () => {
+    const revision = runRevision(brief())!;
+    expect(revisionSummary(revision, 3)).toBe('vs 04:30 run: −0.2 GWh · largest hourly change +1,500 MW at 01:00');
+    expect(revisionSummary(revision, 24)).toContain('−0.2 GWh over 3 of 24 h');
+    expect(revisionSummary(null, 24)).toBe('no earlier run covers this day');
+  });
+});
+
+describe('accessible wind summary', () => {
+  it('describes the delivery, run, daily energy, hourly range and visible outturn', () => {
+    expect(windSummary(brief(), true)).toBe('Wind forecast for Thu 15 Jan from the 14 Jan 07:30 run: 12 GWh, ranging 4.0 to 4.0 GW; outturn 9 GWh.');
+    const snapshot = brief({ hours: [hour(0, { forecast: 9000 }), hour(1, { forecast: 15200 }), hour(2, { forecast: null })] });
+    expect(windSummary(snapshot, false)).toContain('ranging 9.0 to 15.2 GW');
+    expect(windSummary(snapshot, false)).not.toContain('outturn');
+  });
+
+  it('handles mixed runs, zero totals and missing forecasts or outturn', () => {
+    const snapshot = brief({ runs_used: [previous, used], totals_mwh: { forecast: 0, p10: 0, p90: 0, actual: 0 } });
+    expect(windSummary(snapshot, true)).toContain('from the latest run per hour: 0 GWh');
+    expect(windSummary(snapshot, true)).toContain('outturn 0 GWh');
+    snapshot.runs_used = [];
+    snapshot.hours = [];
+    snapshot.totals_mwh.forecast = null;
+    snapshot.totals_mwh.actual = null;
+    expect(windSummary(snapshot, true)).toBe('Wind forecast for Thu 15 Jan from no eligible run: –.');
   });
 });
 

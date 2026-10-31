@@ -18,6 +18,14 @@
   margin-top: 6px;
 }
 
+.accuracy-view .accuracy-sw-series {
+  height: 1.25px;
+}
+
+.accuracy-worst-note {
+  padding: 8px 14px;
+}
+
 .accuracy-view .accuracy-sw-mae {
   background: var(--c-forecast);
   height: 2px;
