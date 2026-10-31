@@ -9,3 +9,4 @@ backend/static/
 .env
 .DS_Store
 *.tsbuildinfo
+.orchestrate/
