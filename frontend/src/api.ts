@@ -36,7 +36,7 @@ export interface Brief {
   calibration_days: number;
 }
 
-export interface Metrics {
+export interface FullMetrics {
   n: number;
   mae: number;
   rmse: number;
@@ -48,6 +48,12 @@ export interface Metrics {
   max_abs: number;
   mean_actual: number;
   mean_horizon_h: number;
+}
+
+export type Metrics = { n: 0 } | FullMetrics;
+
+export function hasMetrics(metrics: Metrics): metrics is FullMetrics {
+  return metrics.n > 0 && 'mae' in metrics;
 }
 
 export interface Accuracy {
@@ -83,31 +89,78 @@ export function apiUrl(path: string, params: Record<string, string | number | un
   return `${API_BASE}${path}${query ? `?${query}` : ''}`;
 }
 
-export type Loadable<T> = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ok'; data: T };
+export type Loadable<T> =
+  | { status: 'loading' }
+  | { status: 'error'; message: string; retry: () => void }
+  | { status: 'ok'; data: T };
 
-/** GET a JSON endpoint; aborts stale requests when the URL changes so fast clicks never show old data. */
+const cache = new Map<string, unknown>();
+const inFlight = new Map<string, Promise<unknown>>();
+
+function request(url: string): Promise<unknown> {
+  if (cache.has(url)) return Promise.resolve(cache.get(url));
+  const pending = inFlight.get(url);
+  if (pending) return pending;
+
+  const promise = fetch(url)
+    .then(async (res) => {
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(typeof body?.detail === 'string' ? body.detail : `Request failed (${res.status})`);
+      }
+      return res.json() as Promise<unknown>;
+    })
+    .then((data) => {
+      cache.set(url, data);
+      return data;
+    })
+    .finally(() => inFlight.delete(url));
+  inFlight.set(url, promise);
+  return promise;
+}
+
+export async function prefetch(url: string): Promise<void> {
+  await request(url);
+}
+
 export function useApi<T>(url: string | null): Loadable<T> {
-  const [state, setState] = useState<Loadable<T>>({ status: 'loading' });
+  const [state, setState] = useState<{ url: string | null; value: Loadable<T> }>({
+    url: null,
+    value: { status: 'loading' },
+  });
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (!url) return;
+    if (cache.has(url)) {
+      setState({ url, value: { status: 'ok', data: cache.get(url) as T } });
+      return;
+    }
+    // Abort this subscriber, not the shared request used by prefetch and other hooks.
     const ctrl = new AbortController();
-    setState((s) => (s.status === 'ok' ? s : { status: 'loading' }));
-    fetch(url, { signal: ctrl.signal })
-      .then(async (res) => {
-        if (!res.ok) {
-          const body = await res.json().catch(() => null);
-          throw new Error(typeof body?.detail === 'string' ? body.detail : `Request failed (${res.status})`);
-        }
-        return res.json() as Promise<T>;
+    setState({ url, value: { status: 'loading' } });
+    request(url)
+      .then((data) => {
+        if (!ctrl.signal.aborted) setState({ url, value: { status: 'ok', data: data as T } });
       })
-      .then((data) => setState({ status: 'ok', data }))
       .catch((err: unknown) => {
         if (ctrl.signal.aborted) return;
-        setState({ status: 'error', message: err instanceof Error ? err.message : 'Request failed' });
+        setState({
+          url,
+          value: {
+            status: 'error',
+            message: err instanceof Error ? err.message : 'Request failed',
+            retry: () => {
+              if (ctrl.signal.aborted) return;
+              setState({ url, value: { status: 'loading' } });
+              setAttempt((value) => value + 1);
+            },
+          },
+        });
       });
     return () => ctrl.abort();
-  }, [url]);
+  }, [url, attempt]);
 
-  return state;
+  if (url && cache.has(url)) return { status: 'ok', data: cache.get(url) as T };
+  return url && state.url === url ? state.value : { status: 'loading' };
 }

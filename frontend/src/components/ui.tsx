@@ -1,4 +1,51 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import type { Loadable } from '../api';
+
+export const axisTick = { fontSize: 11, fill: 'var(--muted)' };
+
+export function ChartFrame({ height, children }: {
+  height: number;
+  children: (size: { width: number; height: number }) => ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+
+  useLayoutEffect(() => {
+    const element = ref.current!;
+    const measure = () => setWidth(element.getBoundingClientRect().width);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={ref} style={{ width: '100%', minWidth: 0, height }}>
+      {width > 0 && children({ width, height })}
+    </div>
+  );
+}
+
+export function ChartTooltip({ title, rows, footer }: {
+  title: ReactNode;
+  rows: { label: string; value: ReactNode; tone?: 'muted' | 'pos' | 'neg' }[];
+  footer?: ReactNode;
+}) {
+  return (
+    <div className="tooltip">
+      <div className="tooltip__title">{title}</div>
+      <dl className="tooltip__rows">
+        {rows.map((row, index) => (
+          <div key={index} className={row.tone}>
+            <dt>{row.label}</dt>
+            <dd>{row.value}</dd>
+          </div>
+        ))}
+      </dl>
+      {footer != null && <div className="tooltip__footer">{footer}</div>}
+    </div>
+  );
+}
 
 /** Whether a CSS media query currently matches. Reads false when `window` or `matchMedia` is unavailable. */
 export function useMediaQuery(query: string): boolean {
@@ -68,9 +115,22 @@ export const DownloadIcon = () => (
   </svg>
 );
 
-export function Status({ state }: { state: { status: 'loading' } | { status: 'error'; message: string } }) {
-  if (state.status === 'error') return <div className="status status--error">Couldn’t load data: {state.message}</div>;
-  return <div className="status">Loading…</div>;
+export function Status({ state, label = 'Loading…', what = 'data', minHeight }: {
+  state: Exclude<Loadable<unknown>, { status: 'ok' }>;
+  label?: string;
+  what?: string;
+  minHeight?: number;
+}) {
+  if (state.status === 'error') {
+    return (
+      <div className="status status--error" role="alert" style={{ minHeight }}>
+        <div>Couldn't load {what}.</div>
+        <div>{state.message}</div>
+        <button type="button" className="text-btn" onClick={state.retry}>Retry</button>
+      </div>
+    );
+  }
+  return <div className="status" role="status" style={{ minHeight }}>{label}</div>;
 }
 
 export function Legend({ items }: { items: { label: string; className: string }[] }) {

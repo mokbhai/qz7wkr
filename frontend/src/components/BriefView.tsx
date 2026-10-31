@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { apiUrl, useApi, type Brief, type CutoffKey, type Meta } from '../api';
+import { Area, CartesianGrid, ComposedChart, Line, Tooltip, XAxis, YAxis } from 'recharts';
+import { apiUrl, prefetch, useApi, type Brief, type CutoffKey, type Meta } from '../api';
 import { addDays, dateRange, gwh, mw, toCsv, ukDay, ukHour, ukStamp } from '../format';
-import { Card, DownloadIcon, IconButton, Legend, Stat, Status, useMediaQuery } from './ui';
+import { axisTick, ChartFrame, Card, DownloadIcon, IconButton, Legend, Stat, Status, useMediaQuery } from './ui';
 
 const gwhValue = (mwh: number | null) => (mwh == null ? '–' : (mwh / 1000).toFixed(1));
 
-export function BriefView({ meta, cutoff }: { meta: Meta; cutoff: CutoffKey }) {
+export function BriefView({ meta, cutoff, delivery, setDelivery }: {
+  meta: Meta;
+  cutoff: CutoffKey;
+  delivery: string;
+  setDelivery: (day: string) => void;
+}) {
   const deliveries = useMemo(() => dateRange(meta.delivery_dates.first, meta.delivery_dates.last), [meta]);
-  const [delivery, setDelivery] = useState('2026-01-15');
   const [showActual, setShowActual] = useState(true);
   const [showRuns, setShowRuns] = useState(false);
 
@@ -16,16 +20,30 @@ export function BriefView({ meta, cutoff }: { meta: Meta; cutoff: CutoffKey }) {
   const cutoffInfo = meta.cutoffs.find((c) => c.key === cutoff)!;
   const idx = deliveries.indexOf(delivery);
 
+  useEffect(() => {
+    if (state.status !== 'ok') return;
+    for (const day of [deliveries[idx - 1], deliveries[idx + 1]]) {
+      if (day) void prefetch(apiUrl('/api/decision', { delivery_date: day, cutoff })).catch(() => {});
+    }
+  }, [state.status, idx, deliveries, cutoff]);
+
   // ← / → step through days, unless the user is typing in a control.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLElement && e.target.closest('input, select, textarea')) return;
-      if (e.key === 'ArrowLeft' && idx > 0) setDelivery(deliveries[idx - 1]);
-      if (e.key === 'ArrowRight' && idx < deliveries.length - 1) setDelivery(deliveries[idx + 1]);
+      if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      if (e.target instanceof Element && e.target.closest('[role="tablist"], button, input, select, textarea, [contenteditable]:not([contenteditable="false"])')) return;
+      if (e.key === 'ArrowLeft' && idx > 0) {
+        e.preventDefault();
+        setDelivery(deliveries[idx - 1]);
+      }
+      if (e.key === 'ArrowRight' && idx < deliveries.length - 1) {
+        e.preventDefault();
+        setDelivery(deliveries[idx + 1]);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [idx, deliveries]);
+  }, [idx, deliveries, setDelivery]);
 
   return (
     <div className="view">
@@ -72,7 +90,7 @@ export function BriefView({ meta, cutoff }: { meta: Meta; cutoff: CutoffKey }) {
       </div>
 
       {state.status !== 'ok' ? (
-        <Status state={state} />
+        <Status state={state} label="Loading wind forecast…" what="wind forecast" minHeight={500} />
       ) : (
         <BriefBody
           brief={state.data}
@@ -196,41 +214,43 @@ function BriefBody({
         }
       >
         <div className="chart chart--tall">
-          <ResponsiveContainer>
-            <ComposedChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-              <CartesianGrid stroke="var(--grid)" vertical={false} />
-              <XAxis dataKey="label" tick={{ fontSize: 11 }} interval={narrow ? 5 : 2} stroke="var(--axis)" tickLine={false} />
-              <YAxis
-                tick={{ fontSize: 11 }}
-                stroke="var(--axis)"
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={(v: number) => v.toLocaleString('en-GB')}
-                domain={[0, (max: number) => Math.ceil(max / 5000) * 5000]}
-                tickCount={6}
-                width={52}
-              />
-              <Tooltip content={<BriefTooltip />} />
-              <Area dataKey="band" stroke="none" fill="var(--c-band)" isAnimationActive={false} />
-              {showRuns &&
-                brief.runs.map((r, j) => (
-                  <Line
-                    key={r.published}
-                    dataKey={`run${j}`}
-                    stroke={r.usable ? 'var(--c-run)' : 'var(--c-late)'}
-                    strokeDasharray={r.usable ? undefined : '3 3'}
-                    strokeWidth={1}
-                    dot={false}
-                    isAnimationActive={false}
-                    connectNulls
-                  />
-                ))}
-              <Line dataKey="forecast" stroke="var(--c-forecast)" strokeWidth={2} dot={false} isAnimationActive={false} />
-              {showActual && (
-                <Line dataKey="actual" stroke="var(--c-actual)" strokeWidth={1.5} dot={false} isAnimationActive={false} />
-              )}
-            </ComposedChart>
-          </ResponsiveContainer>
+          <ChartFrame height={narrow ? 280 : 340}>
+            {({ width, height }) => (
+              <ComposedChart width={width} height={height} data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+                <CartesianGrid stroke="var(--grid)" vertical={false} />
+                <XAxis dataKey="label" tick={axisTick} interval={narrow ? 5 : 2} stroke="var(--axis)" tickLine={false} />
+                <YAxis
+                  tick={axisTick}
+                  stroke="var(--axis)"
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(v: number) => v.toLocaleString('en-GB')}
+                  domain={[0, (max: number) => Math.ceil(max / 5000) * 5000]}
+                  tickCount={6}
+                  width={52}
+                />
+                <Tooltip content={<BriefTooltip />} />
+                <Area dataKey="band" stroke="none" fill="var(--c-band)" isAnimationActive={false} />
+                {showRuns &&
+                  brief.runs.map((r, j) => (
+                    <Line
+                      key={r.published}
+                      dataKey={`run${j}`}
+                      stroke={r.usable ? 'var(--c-run)' : 'var(--c-late)'}
+                      strokeDasharray={r.usable ? undefined : '3 3'}
+                      strokeWidth={1}
+                      dot={false}
+                      isAnimationActive={false}
+                      connectNulls
+                    />
+                  ))}
+                <Line dataKey="forecast" stroke="var(--c-forecast)" strokeWidth={2} dot={false} isAnimationActive={false} />
+                {showActual && (
+                  <Line dataKey="actual" stroke="var(--c-actual)" strokeWidth={1.5} dot={false} isAnimationActive={false} />
+                )}
+              </ComposedChart>
+            )}
+          </ChartFrame>
         </div>
         <Legend
           items={[

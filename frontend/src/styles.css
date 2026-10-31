@@ -6,7 +6,7 @@
   --card: #ffffff;
   --ink: #232220;
   --muted: #6f6c68;
-  --faint: #9a9792;
+  --faint: #6f6c68;
   --border: #e3e2de;
   --border-strong: #d2d0cb;
   --grid: #efeeeb;
@@ -42,6 +42,7 @@
 body {
   margin: 0;
   background: var(--canvas);
+  font-variant-numeric: tabular-nums;
 }
 
 h1,
@@ -144,6 +145,23 @@ input {
   font-size: 13px;
 }
 
+.appbar__tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.text-btn {
+  border: 0;
+  background: none;
+  padding: 4px 0;
+  color: var(--muted);
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
 /* ---------- page */
 
 .page {
@@ -154,6 +172,7 @@ input {
 
 .view {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
 }
 
@@ -269,6 +288,8 @@ input[type='range'] {
 }
 
 button:focus-visible,
+a:focus-visible,
+[role='tabpanel']:focus-visible,
 select:focus-visible,
 input:focus-visible {
   outline: 2px solid var(--accent);
@@ -426,6 +447,34 @@ input:focus-visible {
   margin-bottom: 1px;
 }
 
+.tooltip__rows {
+  margin: 0;
+}
+
+.tooltip__rows > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+}
+
+.tooltip__rows dd {
+  margin: 0;
+  text-align: right;
+}
+
+.tooltip__rows .pos {
+  color: var(--accent);
+}
+
+.tooltip__rows .neg {
+  color: #b4532a;
+}
+
+.tooltip__footer {
+  margin-top: 4px;
+  color: var(--muted);
+}
+
 /* ---------- tables */
 
 .table-wrap {
@@ -481,6 +530,11 @@ tr.is-late td {
 
 td.pos {
   color: var(--accent);
+}
+
+td a {
+  color: var(--accent);
+  text-underline-offset: 3px;
 }
 
 td.neg {
